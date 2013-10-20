@@ -1,0 +1,26 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Express 2012 for Windows Desktop
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "fastjson", "fastjson.vcxproj", "{19687035-7E48-4249-8BD9-97E4AB7B6B16}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "unittest", "unittest\unittest.vcxproj", "{DF5D21A5-27ED-42F3-B153-2A5DDF13579C}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Win32 = Debug|Win32
+		Release|Win32 = Release|Win32
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{19687035-7E48-4249-8BD9-97E4AB7B6B16}.Debug|Win32.ActiveCfg = Debug|Win32
+		{19687035-7E48-4249-8BD9-97E4AB7B6B16}.Debug|Win32.Build.0 = Debug|Win32
+		{19687035-7E48-4249-8BD9-97E4AB7B6B16}.Release|Win32.ActiveCfg = Release|Win32
+		{19687035-7E48-4249-8BD9-97E4AB7B6B16}.Release|Win32.Build.0 = Release|Win32
+		{DF5D21A5-27ED-42F3-B153-2A5DDF13579C}.Debug|Win32.ActiveCfg = Debug|Win32
+		{DF5D21A5-27ED-42F3-B153-2A5DDF13579C}.Debug|Win32.Build.0 = Debug|Win32
+		{DF5D21A5-27ED-42F3-B153-2A5DDF13579C}.Release|Win32.ActiveCfg = Release|Win32
+		{DF5D21A5-27ED-42F3-B153-2A5DDF13579C}.Release|Win32.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
