@@ -32,6 +32,9 @@ namespace fastjson
     const int indent_4_spaces = 0x4;
     const int indent_8_spaces = 0x8;
 
+    // Internal flags
+    const int skip_name = 0x10000;
+
     ///////////////////////////////////////////////////////////////////////////
     // Internal
 
@@ -271,8 +274,8 @@ namespace fastjson
         {
             emit_indent<Ch>(out, flags, indent);
 
-            // Print the name if it exists
-            if (val.name() != val.nameend())
+            // Print the name if it exists and we're not supposed to skip it.
+            if (val.name() != val.nameend() && (flags & skip_name) == 0)
             {
                 out = emit_string(out, val.name(), val.nameend());
                 *out++ = Ch(':');
@@ -282,6 +285,9 @@ namespace fastjson
                     *out++ = Ch(' ');
                 }
             }
+
+            // Nothing deeper should skip the name
+            flags &= ~skip_name;
 
             switch (val.type())
             {
@@ -350,6 +356,17 @@ namespace fastjson
     inline OutputIterator print(OutputIterator out, const json_document<Ch, T_POOL>& doc, int flags = 0)
     {
         return internal::print_value(out, doc.root(), flags, 0);
+    }
+
+    //! \brief Prints the object or array to the given output iterator
+    //! \param out Output iterator to print to.
+    //! \param value The object or array to be printed
+    //! \param flags Flags controlling how json is printed
+    //! \return Output iterator pointing to position immediately after last character of printed text
+    template<class OutputIterator, class Ch>
+    inline OutputIterator print(OutputIterator out, const json_object<Ch>& value, int flags = 0)
+    {
+        return internal::print_value(out, value, flags|skip_name, 0);
     }
 
 #ifndef FASTJSON_NO_STREAMS

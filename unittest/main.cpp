@@ -1,9 +1,6 @@
 // #define FASTJSON_NO_EXCEPTIONS 1
-#include "../fastjson.hpp"
-#include "../fastjson_print.hpp"
 
-#include <stdio.h>
-#include <iostream>
+#include "gtest/gtest.h"
 
 template<class Ch> class dummy_iter
 {
@@ -13,18 +10,22 @@ public:
     dummy_iter& operator * () { return *this; }
 };
 
-namespace fastjson
+int main(int argc, char** argv)
 {
-    void parse_error_handler(const char* what, void* where)
-    {
-        fprintf(stderr, "Parse failed: (%s) (%p)", what, where);
-        abort();
-    }
+    testing::InitGoogleTest(&argc, argv);
+    int i = RUN_ALL_TESTS();
+    return i;
 }
 
-void main()
-{
+#if 0
+#include "../fastjson.hpp"
+#include "../fastjson_print.hpp"
 
+#include <stdio.h>
+#include <iostream>
+
+void foo()
+{
     char buf[128];
     char* p = buf + 128;
     sprintf_s<128>(buf, "%f", 1.0);
@@ -112,3 +113,4 @@ void main()
         printf("");
     }
 }
+#endif
