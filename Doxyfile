@@ -849,7 +849,9 @@ EXCLUDE_PATTERNS       =
 EXCLUDE_SYMBOLS        = FASTJSON_PARSE_ERROR \
                          FASTJSON_PARSE_ERROR_THIS \
                          udouble \
-                         fastjson::internal::*
+                         fastjson::internal::* \
+                         fastjson::static_pool* \
+                         NOEXCEPT
 
 # The EXAMPLE_PATH tag can be used to specify one or more files or directories
 # that contain example code fragments that are included (see the \include

@@ -19,21 +19,19 @@ namespace fastjson
     ///////////////////////////////////////////////////////////////////////////
     // Printing flags
     
-    // Prints with as little whitespace as possible
+    //! Prints with as little whitespace as possible
     const int no_whitespace = 0x10;
 
-    // Prefer spaces to tabs
+    //! Prefer spaces to tabs
     const int use_spaces = 0x20;
 
-    // If spaces are preferred to tabs, use this many spaces (default = 4)
-    // Values can be added or OR'd together (i.e. 1 space + 4 spaces = 5 spaces)
-    const int indent_1_space  = 0x1;
-    const int indent_2_spaces = 0x2;
-    const int indent_4_spaces = 0x4;
-    const int indent_8_spaces = 0x8;
+    const int indent_1_space  = 0x1; //!< Intent 1 space if spaces are preferred to tabs. Can be combined (OR'd) with other intent flag values.
+    const int indent_2_spaces = 0x2; //!< Intent 2 space if spaces are preferred to tabs. Can be combined (OR'd) with other intent flag values.
+    const int indent_4_spaces = 0x4; //!< Intent 4 space if spaces are preferred to tabs. Can be combined (OR'd) with other intent flag values. This is the default.
+    const int indent_8_spaces = 0x8; //!< Intent 8 space if spaces are preferred to tabs. Can be combined (OR'd) with other intent flag values.
 
     // Internal flags
-    const int skip_name = 0x10000;
+    const int skip_name = 0x10000; //!< Internal flag.
 
     ///////////////////////////////////////////////////////////////////////////
     // Internal
@@ -343,11 +341,12 @@ namespace fastjson
             return out;
         }
     }
+    //! \endcond
 
     ///////////////////////////////////////////////////////////////////////////
     // Printing
 
-    //! Prints json to given output iterator
+    //! \brief Prints json to given output iterator
     //! \param out Output iterator to print to.
     //! \param doc Document to be printed
     //! \param flags Flags controlling how json is printed
@@ -370,7 +369,7 @@ namespace fastjson
     }
 
 #ifndef FASTJSON_NO_STREAMS
-    //! Prints json to given output stream.
+    //! \brief Prints json to given output stream.
     //! \param out Output stream to print to.
     //! \param doc Document to be printed
     //! \param flags Flags controlling how json is printed
@@ -383,7 +382,7 @@ namespace fastjson
         return out;
     }
 
-    //! Prints formatted json to given output stream. Uses default printing flags. Use print() function to customize printing process.
+    //! \brief Prints formatted json to given output stream. Uses default printing flags. Use print() function to customize printing process.
     //! \param out Output stream to print to.
     //! \param doc Document to be printed.
     //! \return Output stream.
@@ -391,6 +390,29 @@ namespace fastjson
     inline std::basic_ostream<Ch>& operator << (std::basic_ostream<Ch>& out, const json_document<Ch, T_POOL>& doc)
     {
         return print(out, node);
+    }
+
+    //! \brief Prints the json object or array to the given output stream.
+    //! \param out Output stream to print to.
+    //! \param value The object or array to be printed.
+    //! \param flags Flags controlling how json is printed.
+    //! \return Output stream.
+    template<class Ch>
+    inline std::basic_ostream<Ch>& print(std::basic_ostream<Ch>& out, const json_object<Ch>& value, int flags = 0)
+    {
+        std::ostream_iterator<Ch, Ch> iter(out);
+        print(iter, value, flags|skip_name);
+        return out;
+    }
+
+    //! \brief Prints the formatted json object or array to the given output stream. Uses default printing flags. Use print() function to customize printing process.
+    //! \param out Output stream to print to.
+    //! \param value The object or array to be printed.
+    //! \return Output stream.
+    template<class Ch>
+    inline std::basic_ostream<Ch>& operator << (std::basic_ostream<Ch>& out, const json_object<Ch>& value)
+    {
+        return print(out, value);
     }
 #endif
 }

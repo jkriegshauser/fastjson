@@ -21,6 +21,8 @@
     #include <sstream>
 #endif
 
+#define NOEXCEPT throw()
+
 // Exceptions may be disabled completely by using FASTJSON_NO_EXCEPTIONS,
 // however this will cause the default_error_handler to abort().
 #if !defined(FASTJSON_NO_EXCEPTIONS)
@@ -29,15 +31,14 @@
 
 namespace fastjson
 {
-    //! This exception is thrown by the parser when an error occurs.
+    //! This exception is thrown by the parser when an error occurs when using fastjson::default_error_handler.
     //! Use the what() function to get the human-readable error description.
     //! Use the where() function to get a pointer to position within source text where the error
     //! was detected.
     //! <br><br>
     //! If throwing exceptions is undesirable, exceptions can be disabled
-    //! by using <tt>#define FASTJSON_NO_EXCEPTIONS</tt> before fastjson.hpp is included.
-    //! This will use the parse_error_handler function instead of throwing an exception.
-    //! The parse_error_handler function must be defined by the user.
+    //! by using <tt>\#define FASTJSON_NO_EXCEPTIONS</tt> before fastjson.hpp is included.
+    //! This will change the behavior of fastjson::default_error_handler to \c abort().
     //! <br><br>
     //! This class derives from <tt>std::exception</tt>.
     class parse_error : public std::exception
@@ -52,7 +53,7 @@ namespace fastjson
         //! Gets the human-readable description of the error
         //! \return Pointer to a human-readable description of the error. This error
         //! is always a static literal string.
-        virtual const char* what() const throw()
+        virtual const char* what() const NOEXCEPT
         {
             return what_;
         }
@@ -61,7 +62,7 @@ namespace fastjson
         //! Ch should be the same as the character type of json_document that produced
         //! the error.
         //! \return Pointer to location within the parsed string where the error occurred.
-        template<class Ch> Ch* where() const throw()
+        template<class Ch> Ch* where() const NOEXCEPT
         {
             return reinterpret_cast<Ch*>(where_);
         }
@@ -81,6 +82,9 @@ namespace fastjson
     //! NOTE: The functor must never return, otherwise \c abort() is called.
     struct default_error_handler
     {
+        //! \brief Handles the given error.
+        //! \param what A human-readable description of the error.
+        //! \param where The pointer offset into the buffer given to json_document::parse that generated the error.
         void operator () (const char* what, void* where)
         {
             throw parse_error(what, where);
@@ -149,9 +153,9 @@ namespace fastjson
     //! A single byte representation used by fastjson.
     typedef unsigned char byte;
 
-    //! Enumeration of value types produced by the parser.
-    //! Given by the json_value::type() function.
-    //! See json_value for more information.
+    //! \brief Enumeration of value types produced by the parser.
+    //! Given by the fastjson::json_value::type() function.
+    //! See fastjson::json_value for more information.
     enum value_type
     {
         value_null,     //!< The json null type.
@@ -164,8 +168,8 @@ namespace fastjson
 
     namespace internal
     {
-        // Lookup tables used to speed lookups. These are defined as a template so that they
-        // may be included in this header file without the linker complaining.
+        //! Lookup tables used to speed lookups. These are defined as a template so that they
+        //! may be included in this header file without the linker complaining.
         template<int Dummy>
         struct lookup_tables
         {
@@ -175,22 +179,22 @@ namespace fastjson
             static const char lookup_hexchar[16];
         };
 
-        // Returns a null (empty) string.
+        //! Returns a null (empty) string.
         template<class Ch>
-        Ch* nullstr() throw()
+        Ch* nullstr() NOEXCEPT
         {
             static Ch nul = Ch('\0');
             return &nul;
         }
 
-        // Returns a shared json_value that has type value_null.
+        //! Returns a shared json_value that has type value_null.
         template<class Ch>
-        json_value<Ch>* nullval() throw();
+        json_value<Ch>* nullval() NOEXCEPT;
 
-        // Measures the length of a NUL-terminated string of \c Ch characters.
-        // A null pointer returns a zero length.
+        //! Measures the length of a NUL-terminated string of \c Ch characters.
+        //! A null pointer returns a zero length.
         template<class Ch>
-        std::size_t length(const Ch* p) throw()
+        std::size_t length(const Ch* p) NOEXCEPT
         {
             const Ch* end = p;
             if (end)
@@ -202,13 +206,13 @@ namespace fastjson
             return 0;
         }
 
-        // Compares two strings. Assumes that \c first is NUL-terminated and
-        // \c second is counted (\c secondend points to the first character following the string).
-        // \return 0 if strings match fully (length must match)
-        // \return -1 if first would be sorted lexicographically before second
-        // \return 1 if first would be sorted lexicographically after second
+        //! Compares two strings. Assumes that \c first is NUL-terminated and
+        //! \c second is counted (\c secondend points to the first character following the string).
+        //! \return 0 if strings match fully (length must match)
+        //! \return -1 if first would be sorted lexicographically before second
+        //! \return 1 if first would be sorted lexicographically after second
         template<class Ch>
-        int compare(const Ch* first, const Ch* second, const Ch* secondend) throw()
+        int compare(const Ch* first, const Ch* second, const Ch* secondend) NOEXCEPT
         {
             assert(first); assert(second); assert(secondend);
             while (*first && second != secondend)
@@ -222,10 +226,10 @@ namespace fastjson
             return 0;
         }
         
-        // \brief Translates a \c Ch of a hex character to its numeric value.
-        // \param text the character to convert
-        // \param handler an error handler that is called if \c text is not a valid hex character
-        // \return the numeric representation of the given character
+        //! \brief Translates a \c Ch of a hex character to its numeric value.
+        //! \param text the character to convert
+        //! \param handler an error handler that is called if \c text is not a valid hex character
+        //! \return the numeric representation of the given character
         template<class Ch, class error_handler>
         byte hex_value(Ch* text, error_handler handler)
         {
@@ -249,9 +253,9 @@ namespace fastjson
             }
         }
 
-        // \brief Translates a numeric value to a hex character
-        // \param value The value to translate. Must be less than 16.
-        // \return The hex character that represents the value.
+        //! \brief Translates a numeric value to a hex character
+        //! \param value The value to translate. Must be less than 16.
+        //! \return The hex character that represents the value.
         template<class Ch>
         Ch hex_char(byte value)
         {
@@ -259,11 +263,12 @@ namespace fastjson
             return Ch(lookup_tables<0>::lookup_hexchar[value]);
         }
 
-        // \brief Converts a string value to a double.
-        // \return The double value of the given string. As much of the string as possible is processed.
-        // \return Processing stops when the string is no longer formatted as a double value.
+        //! \brief Converts a string value to a double.
+        //! Numeric string values are converted to a double floating-point number. A string value of 'true' returns 1.0. Other strings return 0.0.
+        //! \return The double value of the given string. As much of the string as possible is processed.
+        //! \return Processing stops when the string is no longer formatted as a double value.
         template<class Ch>
-        double value_to_number(const Ch* start, const Ch* end) throw()
+        double value_to_number(const Ch* start, const Ch* end) NOEXCEPT
         {
             if (start == end) return 0.0;
 
@@ -339,7 +344,7 @@ namespace fastjson
             return num * fact;
         }
 
-        // A union for a double that breaks it apart into mantissa, exponent and sign bits.
+        //! A union for a double that breaks it apart into mantissa, exponent and sign bits.
         union udouble
         {
             double d;
@@ -354,9 +359,12 @@ namespace fastjson
             } s;
         };
 
-        // \brief Converts a double to a json-compatible number string.
-        // \return true if the value could be represented as a json number.
-        // \return false if the value is non-finite (infinite or not-a-number) and must be represented as a json string
+        //! \brief Converts a double to a json-compatible number string.
+        //! Absolute values smaller than 0.0000000000001 are rounded to zero.
+        //! Absolute values smaller than 0.0000000001 or larger than 1,000,000,000,000 are represented using scientific notation.
+        //! Up to 12 digits of fractional precision are used.
+        //! \return true if the value could be represented as a json number.
+        //! \return false if the value is non-finite (infinite or not-a-number) and must be represented as a json string
         template<class Ch>
         bool number_to_string(const double& val, Ch* buf, Ch*& bufend)
         {
@@ -421,13 +429,13 @@ namespace fastjson
             return true;
         }
 
-        // \brief Converts a text string to a boolean value.
-        // This works with all json values. A json string of "true" will return true.
-        // A string that starts with a non-zero number will also return true.
-        // A null value will return false.
-        // No errors or exceptions are thrown. Invalid values will return false.
+        //! \brief Converts a text string to a boolean value.
+        //! This works with all json values. A json string of "true" will return true.
+        //! A string that starts with a non-zero number will also return true.
+        //! A null value will return false.
+        //! No errors or exceptions are thrown. Invalid values will return false.
         template<class Ch>
-        bool value_to_boolean(const Ch* start, const Ch* end) throw()
+        bool value_to_boolean(const Ch* start, const Ch* end) NOEXCEPT
         {
             if (start == end) return false;
             if (start[0] == Ch('t') && start[1] == Ch('r') && start[2] == Ch('u') && start[3] == Ch('e')) return true;
@@ -435,10 +443,10 @@ namespace fastjson
             return value_to_number(start, end) != 0.0;
         }
 
-        // \brief Reads a json-style UTF-16 character in the format \u1234
-        // \param ptr the current parsing location. The pointer is advanced by the parsing of the UTF-16 value.
-        // \param handler if parsing fails, the function is invoked.
-        // \return The UTF-16 character represented by the string.
+        //! \brief Reads a json-style UTF-16 character in the format \\u1234
+        //! \param ptr the current parsing location. The pointer is advanced by the parsing of the UTF-16 value.
+        //! \param handler if parsing fails, the function is invoked.
+        //! \return The UTF-16 character represented by the string.
         template<class Ch, class error_handler>
         wint_t read_utf16(Ch*& ptr, error_handler handler)
         {
@@ -545,11 +553,11 @@ namespace fastjson
     //! See json_document::parse() function.
     const int parse_default = 0;
 
-    const int parse_no_string_terminators = 1 << 0;
+    const int parse_no_string_terminators = 1 << 0; //!< Don't terminate string values with NUL characters. Use json_value::nameend() to get the end of the string.
 
-    const int parse_no_string_translation = 1 << 1;
+    const int parse_no_string_translation = 1 << 1; //!< Don't translate characters such as \\b to backspace.
 
-    const int parse_non_destructive = parse_no_string_terminators | parse_no_string_translation;
+    const int parse_non_destructive = parse_no_string_terminators | parse_no_string_translation; //!< Ensures that the buffer passed to json_document::parse is not modified.
 
     ///////////////////////////////////////////////////////////////////////////
     // Allocator interface
@@ -590,8 +598,8 @@ namespace fastjson
     {
         byte static_pool_[static_size];
     protected:
-        byte* static_pool_start() throw() { return static_pool_; }
-        byte* static_pool_end() throw() { return static_pool_ + static_size; }
+        byte* static_pool_start() NOEXCEPT { return static_pool_; }
+        byte* static_pool_end() NOEXCEPT { return static_pool_ + static_size; }
     };
 
     // Specialization of static_pool that is zero bytes
@@ -599,8 +607,8 @@ namespace fastjson
     class static_pool<0>
     {
     protected:
-        byte* static_pool_start() throw() { return 0; }
-        byte* static_pool_end() throw() { return 0; }
+        byte* static_pool_start() NOEXCEPT { return 0; }
+        byte* static_pool_end() NOEXCEPT { return 0; }
     };
 
     //! \class memory_pool
@@ -610,15 +618,15 @@ namespace fastjson
     //! the object and therefore does not require a heap allocation. Once the static pool is exhausted, dynamic pools of size \c dynamic_size
     //! (or larger as necessary) are allocated whenever additional memory is needed. The \c T_ALLOC template parameter is used for the dynamic pool
     //! allocation.
-    //! \param T_ALLOC the allocator to use for dynamic allocations. See default_allocator for more info.
-    //! \param static_size Defaults to FASTJSON_STATIC_POOL_SIZE (32 KBytes). Specifies the size of memory to be included in the memory_pool for initial allocations. May be zero to force all allocations to be dynamic (reduces \c sizeof(memory_pool) ).
-    //! \param dynamic_size Defaults to FASTJSON_DYNAMIC_POOL_SIZE (32 KBytes). Specifies the size of each additional needed dynamic pool from the heap. If set to zero, all requested allocations are passed through to the heap (no pooling occurs).
+    //! \tparam T_ALLOC the allocator to use for dynamic allocations. See default_allocator for more info.
+    //! \tparam static_size Defaults to FASTJSON_STATIC_POOL_SIZE (32 KBytes). Specifies the size of memory to be included in the memory_pool for initial allocations. May be zero to force all allocations to be dynamic (reduces \c sizeof(memory_pool) ).
+    //! \tparam dynamic_size Defaults to FASTJSON_DYNAMIC_POOL_SIZE (32 KBytes). Specifies the size of each additional needed dynamic pool from the heap. If set to zero, all requested allocations are passed through to the heap (no pooling occurs).
     template<class T_ALLOC = default_allocator, std::size_t static_size = FASTJSON_STATIC_POOL_SIZE, std::size_t dynamic_size = FASTJSON_DYNAMIC_POOL_SIZE>
     class memory_pool : public T_ALLOC, public static_pool<static_size>
     {
     public:
         //! Constructor
-        memory_pool() throw() { init(); }
+        memory_pool() NOEXCEPT { init(); }
 
         //! Destructor. Frees all of the memory used by this memory_pool.
         ~memory_pool() { clear(); }
@@ -657,7 +665,7 @@ namespace fastjson
 
     protected:
         //! \brief Initializes the memory pool.
-        void init() throw()
+        void init() NOEXCEPT
         {
             pool_ = static_pool_start();
             next_ = align_forward(pool_);
@@ -666,7 +674,7 @@ namespace fastjson
         }
 
         //! \brief Aligns \c data on FASTJSON_ALIGNMENT.
-        byte* align_forward(byte* data) throw()
+        byte* align_forward(byte* data) NOEXCEPT
         {
             return (byte*)((size_t)(data + (FASTJSON_ALIGNMENT-1)) & ~(FASTJSON_ALIGNMENT-1));
         }
@@ -710,8 +718,8 @@ namespace fastjson
     ///////////////////////////////////////////////////////////////////////////
     // json_value
 
-    // An instance of a json value.
-    // \param Ch the character type to use. Will match character type used by json_document.
+    //! \brief An instance of a json value.
+    //! \tparam Ch the character type to use. Will match character type used by json_document.
     template<class Ch = char>
     class json_value
     {
@@ -719,7 +727,7 @@ namespace fastjson
         template<class Ch> friend class json_object;
 
         //! Constructor. Values may only be created by the json_document.
-        json_value(value_type type = value_null, Ch* name = 0, Ch* nameend = 0) throw()
+        json_value(value_type type = value_null, Ch* name = 0, Ch* nameend = 0) NOEXCEPT
             : type_(type)
             , name_(name)
             , nameend_(nameend)
@@ -730,29 +738,30 @@ namespace fastjson
             , next_(0)
         {}
         //! Destructor
-        virtual ~json_value() throw() {}
+        virtual ~json_value() NOEXCEPT {}
 
     public:
         //! \brief Returns the value_type of this value.
         //! \return The value_type of this value.
-        value_type type() const throw() { return type_; }
+        value_type type() const NOEXCEPT { return type_; }
 
         //! \brief Returns the name of this value, or an empty string if the value is not named.
-        const Ch* name() const throw() { return name_; }
-        const Ch* nameend() const throw() { return nameend_; }
+        const Ch* name() const NOEXCEPT { return name_; }
+        //! \brief Returns the end of the string returned by name(). Useful if parse_no_string_terminators is used.
+        const Ch* nameend() const NOEXCEPT { return nameend_; }
 
         //! \brief Returns true if this is a representation of a json null vaule.
-        bool is_null() const throw() { return type_ == value_null; }
+        bool is_null() const NOEXCEPT { return type_ == value_null; }
         //! \brief Retruns true if this is a representation of a json boolean value.
-        bool is_boolean() const throw() { return type_ == value_bool; }
+        bool is_boolean() const NOEXCEPT { return type_ == value_bool; }
         //! \brief Returns true if this is a representation of a json numeric value.
-        bool is_number() const throw() { return type_ == value_number; }
+        bool is_number() const NOEXCEPT { return type_ == value_number; }
         //! \brief Returns true if this is a representation of a json string value.
-        bool is_string() const throw() { return type_ == value_string; }
+        bool is_string() const NOEXCEPT { return type_ == value_string; }
         //! \brief Returns true if this is a representation of a json array value.
-        bool is_array() const throw() { return type_ == value_array; }
+        bool is_array() const NOEXCEPT { return type_ == value_array; }
         //! \brief Returns true if this is a representation of a json object value.
-        bool is_object() const throw() { return type_ == value_object; }
+        bool is_object() const NOEXCEPT { return type_ == value_object; }
 
         //! \brief Attempts to convert the value to a string.
         //! For a null value, "null" is returned.
@@ -760,8 +769,9 @@ namespace fastjson
         //! For a numeric value, the string representation of the numeric value is returned.
         //! Objects and arrays will return an empty string.
         //! Use fastjson::print in fastjson_print.hpp to render objects and arrays to string.
-        const Ch* as_string() const throw() { return value_; }
-        const Ch* as_string_end() const throw() { return valueend_; }
+        const Ch* as_string() const NOEXCEPT { return value_; }
+        //! \brief Returns the end of the string returned by as_string(). Useful if parse_no_string_terminators is used.
+        const Ch* as_string_end() const NOEXCEPT { return valueend_; }
 
         //! \brief Attempts to convert the value to a number.
         //! A null value or a false boolean value will return 0.0.
@@ -777,45 +787,60 @@ namespace fastjson
         bool   as_boolean() const { return internal::value_to_bool(value_, valueend_); }
 
         //! \brief Queries the array interface if the value is an array or an object.
-        json_object<Ch>* as_array() throw() { return is_array()|is_object() ? static_cast<json_object<Ch>*>(this) : 0; }
+        json_object<Ch>* as_array() NOEXCEPT { return is_array()|is_object() ? static_cast<json_object<Ch>*>(this) : 0; }
         //! \brief Queries the array interface if the value is an array or an object.
-        const json_object<Ch>* as_array() const throw() { return is_array()|is_object() ? static_cast<const json_object<Ch>*>(this) : 0; }
+        const json_object<Ch>* as_array() const NOEXCEPT { return is_array()|is_object() ? static_cast<const json_object<Ch>*>(this) : 0; }
         //! \brief Queries the object interface if the value is an array or an object.
-        json_object<Ch>* as_object() throw() { return is_array()|is_object() ? static_cast<json_object<Ch>*>(this) : 0; }
+        json_object<Ch>* as_object() NOEXCEPT { return is_array()|is_object() ? static_cast<json_object<Ch>*>(this) : 0; }
         //! \brief Queries the object interface if the value is an array or an object.
-        const json_object<Ch>* as_object() const throw() { return is_array()|is_object() ? static_cast<const json_object<Ch>*>(this) : 0; }
+        const json_object<Ch>* as_object() const NOEXCEPT { return is_array()|is_object() ? static_cast<const json_object<Ch>*>(this) : 0; }
 
         //! \brief When iterating, returns the next sibling to this value.
-        const json_value<Ch>* next_sibling() const throw() { return next_; }
+        const json_value<Ch>* next_sibling() const NOEXCEPT { return next_; }
 
     protected:
-        value_type type_;
-        Ch* name_;
-        Ch* nameend_;
-        Ch* value_;
-        Ch* valueend_;
-        json_object<Ch>* owner_;
-        json_value<Ch>* prev_;
-        json_value<Ch>* next_;
+        value_type type_;           //!< The type of this json_value object
+        Ch* name_;                  //!< Pointer to the name of this json_value. name_ and nameend_ will be valid but point to an empty string if this json_value has no name.
+        Ch* nameend_;               //!< Pointer to the end of the name of this json_value.
+        Ch* value_;                 //!< Pointer to the string representation of this json_value.
+        Ch* valueend_;              //!< Pointer to the end of the string representation of this json_value.
+        json_object<Ch>* owner_;    //!< The json_object that owns this json_value. Will be NULL for the root.
+        json_value<Ch>* prev_;      //!< Points to the previous json_value in an array or object. NULL if there is no previous json_value.
+        json_value<Ch>* next_;      //!< Points to the next json_value in an array or object. NULL if there is no previous json_value.
     };
 
+    //! \brief An instance of a json object or array.
+    //! \tparam Ch the character type to use. Will match character type used by json_document.
     template<class Ch = char>
     class json_object : public json_value<Ch>
     {
         template<class Ch, class error_handler, class T_POOL> friend class json_document;
 
     public:
-        json_object(value_type type = value_null, Ch* name = 0, Ch* nameend = 0) throw()
+        //! \brief Constructor
+        json_object(value_type type, Ch* name, Ch* nameend) NOEXCEPT
             : json_value<Ch>(type, name, nameend)
             , child_(0)
             , lastchild_(0)
             , numchildren_(0)
-        {}
+        {
+            assert(type == value_array || type == value_object);
+        }
 
-        size_t num_children() const throw() { return numchildren_; }
-        const json_value<Ch>* first_child() const throw() { return child_; }
+        //! \brief Returns the number of child json_value objects.
+        size_t num_children() const NOEXCEPT { return numchildren_; }
 
-        const json_value<Ch>& operator [] (const Ch* name) const throw()
+        //! \brief Returns true if this object or array has no children (i.e. it's empty).
+        bool is_empty() const NOEXCEPT { return numchildren_ == 0; }
+
+        //! \brief Returns the first json_value object. See json_value::next_sibling() for iteration.
+        //! If there are no child objects, NULL is returned.
+        const json_value<Ch>* first_child() const NOEXCEPT { return child_; }
+
+        //! \brief For a json object, accesses a member by name.
+        //! The name is case-sensitive. Has time order O(n).
+        //! If the value does not exist, a json_value of type value_null is returned.
+        const json_value<Ch>& operator [] (const Ch* name) const NOEXCEPT
         {
             assert(type_ == value_object);
             const json_value<Ch>* p = child_;
@@ -830,48 +855,97 @@ namespace fastjson
             return *internal::nullval<Ch>();
         }
 
-        const json_value<Ch>& operator [] (int index) const throw()
+        //! \brief For a json array (or object), accesses a member by index.
+        //! Has time order O(n).
+        //! \param index The index to access. Negative numbers start at the last position (-1 is the last). Zero starts at the first position.
+        //! \return the json_value at the specified index.
+        //! \return For an invalid index, a json_value of type value_null is returned.
+        const json_value<Ch>& operator [] (int index) const NOEXCEPT
         {
-            const json_value<Ch>* p = child_;
-            while (index-- > 0 && p)
+            const json_value<Ch>* p;
+            if (index < 0)
             {
-                p = p->next_;
+                p = lastchild_;
+                while (++index < 0 && p) p = p->prev_;
             }
-            return index == 0 ? *p : internal::nullval<Ch>();
+            else
+            {
+                while (index-- > 0 && p) p = p->next_;
+            }
+            return p ? *p : internal::nullval<Ch>();
         }
 
-        bool array_add(json_value<Ch>* val) throw()
+        //! \brief Adds the given value to the end of the array.
+        //! \param val A json_value that has been allocated by any of the allocation functions in json_document.
+        //! \return true if the json_value was added. Returns false if not an array or \c val is a NULL pointer or already exists in an array or object.
+        bool array_add(json_value<Ch>* val) NOEXCEPT
         {
-            if (!is_array() || val == 0) return false;
+            if (!is_array() || val == 0 || val->owner_ != 0) return false;
             add_child(val);
             return true;
         }
 
-        bool array_insert(json_value<Ch>* val, int index) throw()
+        //! \brief Inserts the given value at the given index of the array.
+        //! Has time order O(n).
+        //! \param val A json_value that has been allocated by any of the allocation functions in json_document.
+        //! \param index The index at which to insert \c val. Negative numbers start at the last position (-1). Zero inserts before the first position. Indexes are clamped, so INT_MIN would insert before first and INT_MAX would insert after last.
+        //! \return true if the json_value was inserted. Returns false if not an array or \c val is a NULL pointer or already exists in an array or object.
+        bool array_insert(json_value<Ch>* val, int index) NOEXCEPT
         {
             assert(val->owner_ == 0);
             if (!is_array() || val == 0 || val->owner_ != 0) return false;
-            json_value<Ch>** pp = &child_;
-            while (index-- > 0 && *pp)
+            json_value<Ch>** pp;
+            if (index < 0)
             {
-                pp = &(*pp)->next_;
+                pp = &lastchild_;
+                while (++index < 0 && *pp)
+                {
+                    pp = &(*pp)->prev_;
+                }
+                val->prev_ = *pp;
+                if (val->prev_) val->prev_->next_ = val; else child_ = val;
+                val->next_ = *pp ? (*pp)->next_ : 0;
+            }
+            else
+            {
+                pp = &child_;
+                while (index-- > 0 && *pp)
+                {
+                    pp = &(*pp)->next_;
+                }
+                val->next_ = *pp;
+                if (val->next_) val->next_->prev_ = val; else lastchild_ = val;
+                val->prev_ = *pp ? (*pp)->prev_ : 0;
             }
 
-            val->next_ = *pp;
-            if (val->next_) val->next_->prev_ = val; else lastchild_ = val;
-            val->prev_ = *pp ? (*pp)->prev_ : 0;
             *pp = val;
             ++numchildren_;
             return true;
         }
 
-        json_value<Ch>* array_remove(int index) throw()
+        //! \brief Removes a json_value from the array.
+        //! Has time order O(n).
+        //! \param index The index to remove. Negative numbers index from the last value (-1 is the last item). Zero starts at the first value. Indexes are clamped so INT_MIN would remove the first value and INT_MAX would remove the last.
+        //! \return the removed value. It may be re-added by using array_add or array_insert. If the array is empty, NULL is returned. The returned value will be automatically destroyed when the json_document that constructed it is destroyed.
+        json_value<Ch>* array_remove(int index) NOEXCEPT
         {
             if (!is_array()) return 0;
-            json_value<Ch>* p = child_;
-            while (index-- > 0 && p)
+            json_value<Ch>* p;
+            if (index < 0)
             {
-                p = p->next_;
+                p = lastchild_;
+                while (++index < 0 && p && p->prev_)
+                {
+                    p = p->prev_;
+                }
+            }
+            else
+            {
+                p = child_;
+                while (index-- > 0 && p && p->next_)
+                {
+                    p = p->next_;
+                }
             }
 
             if (p)
@@ -885,11 +959,17 @@ namespace fastjson
             return 0;
         }
 
-        bool object_set(const Ch* name, json_value<Ch>* val) throw()
+        //! \brief Sets a value by name on a json object.
+        //! Has time order O(n).
+        //! \param name The case-sensitive name to assign to \c val. If the name is already in use, the previous value is replaced.
+        //! \param val The value to set within the object that has been allocated by any of the allocation functions in json_document.
+        //! \param old An optional pointer that receives the replaced value (or NULL if a value was not replaced).
+        bool object_set(const Ch* name, json_value<Ch>* val, json_value<Ch>** old = 0) NOEXCEPT
         {
+            if (old) *old = 0;
             if (!is_object()) return false;
             if (name == 0 || *name == Ch('\0')) return false;
-            assert(val->owner_ == 0); // Shouldn't have an owner
+            if (val == 0 || val->owner_ != 0) return false;
             val->name_ = name;
             val->nameend_ = name + internal::length(name);
             // If there's an existing value by this name, then replace it.
@@ -899,6 +979,7 @@ namespace fastjson
                 if (internal::compare(name, (*pp)->name_, (*pp)->nameend_) == 0)
                 {
                     // Replace the node *pp with val
+                    if (old) *old = *pp;
                     val->prev_ = (*pp)->prev_;
                     val->next_ = (*pp)->next_;
                     if (val->next_) val->next_->prev_ = val;
@@ -914,7 +995,11 @@ namespace fastjson
             return true;
         }
 
-        json_value<Ch>* object_remove(const Ch* name) throw()
+        //! \brief Removes a value from a json object.
+        //! Has time order O(n).
+        //! \param name The case-sensitive name of the value to remove.
+        //! \return The removed json_value object if found. NULL if nothing was found. The returned json_value will be automatically destroyed when the json_document that constructed it is destroyed.
+        json_value<Ch>* object_remove(const Ch* name) NOEXCEPT
         {
             if (!is_object()) return 0;
             if (name == 0 || *name == Ch('\0')) return false;
@@ -934,7 +1019,8 @@ namespace fastjson
             return 0;
         }
 
-        void remove_all() throw()
+        //! \brief Removes all children of a json object or array.
+        void remove_all() NOEXCEPT
         {
             json_value<Ch>* p = child_;
             while (p)
@@ -947,7 +1033,8 @@ namespace fastjson
         }
 
     private:
-        void add_child(json_value<Ch>* child) throw()
+        //! \brief Helper function for appending a child to the end.
+        void add_child(json_value<Ch>* child) NOEXCEPT
         {
             assert(child->owner_ == 0); // Shouldn't have an owner
             child->owner_ = this;
@@ -973,6 +1060,10 @@ namespace fastjson
     ///////////////////////////////////////////////////////////////////////////
     // json_document
 
+    //! \brief The main workhorse of the fastjson library.
+    //! \tparam Ch The character type to use. Determines whether UTF-8, UTF-16 or UTF-32 encoding is used. The document is converted to the best size-matching encoding.
+    //! \tparam error_handler The functor class that will be handling errors. A concrete instance can be passed to the parse() function.
+    //! \tparam T_POOL Allows overriding the memory pool for this json_document object. See memory_pool for more information.
     template<class Ch = char, class error_handler = default_error_handler, class T_POOL = memory_pool<> >
     class json_document : protected T_POOL, protected error_handler
     {
@@ -983,9 +1074,13 @@ namespace fastjson
     public:
         //! Constructor
         json_document()
-            : root_(allocate_object(value_object, internal::nullstr<Ch>(), internal::nullstr<Ch>()))
+            : root_(allocate_object())
         {}
 
+        //! \brief Parses a json document.
+        //! \tparam Flags The flags to use when parsing.
+        //! \param text The json text to process. Must be NUL-terminated.
+        //! \param handler An optional instance of the error handler. See default_error_handler for default behavior.
         template<int Flags> void parse(Ch* text, error_handler handler = error_handler())
         {
             assert(text);
@@ -1016,29 +1111,19 @@ namespace fastjson
             }
         }
 
-        const json_object<Ch>& root() const throw() { return *root_; }
+        //! \brief Returns the const root json_object for this document.
+        //! \return The const root json_object for this document. For a newly-constructed json_document, this is an empty json_object of type value_object.
+        const json_object<Ch>& root() const NOEXCEPT { return *root_; }
 
-        json_value<Ch>* allocate_value()
-        {
-            return new (alloc(sizeof(json_value<Ch>))) json_value<Ch>;
-        }
+        //! \brief Returns the mutable root json_object for this document.
+        //! \return The mutable root json_object for this document. For a newly-constructed json_document, this is an empty json_object of type value_object.
+        json_object<Ch>& root() NOEXCEPT { return *root_; }
 
-        json_value<Ch>* allocate_value(value_type type, Ch* name, Ch* nameend)
-        {
-            return new (alloc(sizeof(json_value<Ch>))) json_value<Ch>(type, name, nameend);
-        }
-
-        json_object<Ch>* allocate_object()
-        {
-            return new (alloc(sizeof(json_object<Ch>))) json_object<Ch>;
-        }
-
-        json_object<Ch>* allocate_object(value_type type, Ch* name, Ch* nameend)
-        {
-            assert(type == value_object || type == value_array);
-            return new (alloc(sizeof(json_object<Ch>))) json_object<Ch>(type, name, nameend);
-        }
-
+        //! \brief Allocates a string for use as a name or string value.
+        //! See json_object::object_set() as an example of using \c allocate_string for a name.
+        //! \param str The string to copy. May be NULL which returns an empty string.
+        //! \return A pointer to a copy of str. The destruction of this copy will happen when the json_document is destroyed.
+        //! \return Will never be NULL (but the error_handler will be triggered if the memory_pool fails to allocate).
         Ch* allocate_string(const Ch* str)
         {
             if (str)
@@ -1051,22 +1136,27 @@ namespace fastjson
                     *p = *str;
                     ++p, ++str;
                 }
+                *p = Ch('\0');
                 return newstr;
             }
             return nullstr<Ch>();
         }
 
-        json_value<Ch>* allocate_null_value(const Ch* name)
+        //! \brief Allocates a json null value that can be used for json_object::array_add, json_object::array_insert or json_object::object_set.
+        //! \return The json_value representation. Will never be NULL (but the error_handler will be triggered if the memory_pool fails to allocate).
+        json_value<Ch>* allocate_null_value()
         {
-            json_value<Ch>* pval = allocate_value(value_null, name, name + internal::length(name));
+            json_value<Ch>* pval = allocate_value(value_null);
             pval->value_ = &nulltext[0];
             pval->valueend_ = &nulltext[4];
             return pval;
         }
 
-        json_value<Ch>* allocate_bool_value(const Ch* name, bool val)
+        //! \brief Allocates a json boolean value that can be used for json_object::array_add, json_object::array_insert or json_object::object_set.
+        //! \return The json_value representation. Will never be NULL (but the error_handler will be triggered if the memory_pool fails to allocate).
+        json_value<Ch>* allocate_bool_value(bool val)
         {
-            json_value<Ch>* pval = allocate_value(value_bool, name, name + internal::length(name));
+            json_value<Ch>* pval = allocate_value(value_bool);
             if (val)
             {
                 pval->value_ = &truetext[0];
@@ -1080,17 +1170,29 @@ namespace fastjson
             return pval;
         }
 
-        json_value<Ch>* allocate_string_value(const Ch* name, const Ch* value)
+        //! \brief Allocates a json string value that can be used for json_object::array_add, json_object::array_insert or json_object::object_set.
+        //! Note that \c value is not copied. The caller must ensure that the lifetime of \c value is as long as the json_document.
+        //! This can be accomplished by calling allocate_string() to create a string copy with a guaranteed lifetime.
+        //! \param value The string value to reference. The lifetime must be as long as the json_document exists.
+        //! \return The json_value representation. Will never be NULL (but the error_handler will be triggered if the memory_pool fails to allocate).
+        json_value<Ch>* allocate_string_value(const Ch* value)
         {
-            json_value<Ch>* pval = allocate_value(value_string, name, name + internal::length(name));
+            json_value<Ch>* pval = allocate_value(value_string);
             pval->value_ = value;
             pval->valueend_ = value + internal::length(value);
             return pval;
         }
 
-        json_value<Ch>* allocate_number_value(const Ch* name, double val)
+        //! \brief Allocates a json number value that can be used for json_object::array_add, json_object::array_insert or json_object::object_set.
+        //! Note that the given value is immediately converted to a string representation. If the given \c val is NaN or Infinite, the returned json_value is actually a string representation.
+        //! Absolute values smaller than 0.0000000000001 are rounded to zero.
+        //! Absolute values smaller than 0.0000000001 or larger than 1,000,000,000,000 are represented using scientific notation.
+        //! Up to 12 digits of fractional precision are used.
+        //! \param val The floating-point value to use.
+        //! \return The json_value representation. Will never be NULL (but the error_handler will be triggered if the memory_pool fails to allocate).
+        json_value<Ch>* allocate_number_value(double val)
         {
-            json_value<Ch>* pval = allocate_value(value_number, name, name + internal::length(name));
+            json_value<Ch>* pval = allocate_value(value_number);
 
             Ch buffer[128];
             if (!internal::number_to_string(val, buffer, buffer + 128))
@@ -1105,7 +1207,34 @@ namespace fastjson
             return pval;
         }
 
+        //! \brief Allocates a json array that can contain other json_value objects and can be used for json_object::array_add, json_object::array_insert or json_object::object_set.
+        //! \return The json_object representation of an array. Will never be NULL (but the error_handler will be triggered if the memory_pool fails to allocate).
+        json_object<Ch>* allocate_array()
+        {
+            return allocate_object(value_array);
+        }
+
+        //! \brief Allocates a json object that can contain other json_value objects and can be used for json_object::array_add, json_object::array_insert or json_object::object_set.
+        //! \return The json_object representation of an array. Will never be NULL (but the error_handler will be triggered if the memory_pool fails to allocate).
+        json_object<Ch>* allocate_object()
+        {
+            return allocate_object(value_object);
+        }
+
     private:
+        // Uses placement new to instantiate a json_value from the memory_pool.
+        json_value<Ch>* allocate_value(value_type type = value_null)
+        {
+            return new (alloc(sizeof(json_value<Ch>))) json_value<Ch>(type, internal::nullstr<Ch>(), internal::nullstr<Ch>());
+        }
+
+        // Uses placement new to instantate a json_object from the memory_pool.
+        json_object<Ch>* allocate_object(value_type type)
+        {
+            return new (alloc(sizeof(json_object<Ch>))) json_object<Ch>(type, internal::nullstr<Ch>(), internal::nullstr<Ch>());
+        }
+
+        // Predicate for determining if \c ch is whitespace. Uses a look-up-table.
         struct whitespace_pred
         {
             bool operator () (Ch ch)
@@ -1115,6 +1244,7 @@ namespace fastjson
             }
         };
 
+        // Predicate for determining if \c ch is numeric. Uses a look-up-table.
         struct digit_pred
         {
             bool operator () (Ch ch)
@@ -1124,6 +1254,8 @@ namespace fastjson
             }
         };
 
+        // Internal function to allocate \c size bytes from the given memory_pool (T_POOL).
+        // Invokes the error_handler if memory allocation fails.
         byte* alloc(std::size_t size)
         {
             byte* p = T_POOL::alloc(size);
@@ -1134,6 +1266,7 @@ namespace fastjson
             return p;
         }
 
+        // Advances \c text until the character at the front is not of type \c StopPred.
         template<class StopPred, int Flags>
         static void skip(Ch*& text)
         {
@@ -1146,6 +1279,7 @@ namespace fastjson
             text = temp;
         }
 
+        // Internal helper function for parsing a json object. Advances \c text past the object.
         template<int Flags> json_object<Ch>* parse_object(json_object<Ch>* val, Ch*& text)
         {
             json_value<Ch>* lastchild = 0;
@@ -1160,6 +1294,7 @@ namespace fastjson
                 return val;
             }
 
+            // Not necessary, but a more correct parse error.
             if (*text != Ch('\"')) { FASTJSON_PARSE_ERROR_THIS("Expected end-of-object '}' or name (string)", text); }
 
             for (;;)
@@ -1219,6 +1354,7 @@ namespace fastjson
             return val;
         }
 
+        // Internal helper function for parsing a json array. Advances \c text past the array.
         template<int Flags> json_object<Ch>* parse_array(json_object<Ch>* val, Ch*& text)
         {
             json_value<Ch>* lastchild = 0;
@@ -1275,6 +1411,8 @@ namespace fastjson
             return val;
         }
 
+        // Internal helper function for parsing a json string. Advances \c text past the string.
+        // \c begin and \c end receive the string pointers.
         template<int Flags> void parse_string(Ch*& text, Ch*& begin, Ch*& end)
         {
             Ch* out = text;
@@ -1395,6 +1533,7 @@ namespace fastjson
             }
         }
 
+        // Internal helper function for parsing a json number. Advances \c text past the number.
         template<int Flags> void parse_number(Ch*& text, json_value<Ch>* val)
         {
             val->type_ = value_number;
@@ -1441,6 +1580,7 @@ namespace fastjson
             val->valueend_ = text;
         }
 
+        // Internal helper function for parsing a json_value.
         template<int Flags> json_value<Ch>* parse_value(Ch*& text)
         {
             json_value<Ch>* val = 0;
@@ -1456,8 +1596,7 @@ namespace fastjson
             case Ch('f'): // False
                 if (text[1] == Ch('a') && text[2] == Ch('l') && text[3] == Ch('s') && text[4] == Ch('e'))
                 {
-                    val = allocate_value();
-                    val->type_ = value_bool;
+                    val = allocate_value(value_bool);
                     val->value_ = &text[0];
                     val->valueend_ = &text[5];
                     text += 5;
@@ -1468,8 +1607,7 @@ namespace fastjson
             case Ch('t'): // True
                 if (text[1] == Ch('r') && text[2] == Ch('u') && text[3] == Ch('e'))
                 {
-                    val = allocate_value();
-                    val->type_ = value_bool;
+                    val = allocate_value(value_bool);
                     val->value_ = &text[0];
                     val->valueend_ = &text[4];
                     text += 4;
@@ -1480,8 +1618,7 @@ namespace fastjson
             case Ch('n'): // Null
                 if (text[1] == Ch('u') && text[2] == Ch('l') && text[3] == Ch('l'))
                 {
-                    val = allocate_value();
-                    val->type_ = value_null;
+                    val = allocate_value(value_null);
                     val->value_ = &text[0];
                     val->valueend_ = &text[4];
                     text += 4;
@@ -1508,6 +1645,7 @@ namespace fastjson
             FASTJSON_PARSE_ERROR_THIS("Expected value", text);
         }
 
+        // Pre-defined values to reduce unnecessary memory_pool allocations.
         static const Ch truetext[];
         static const Ch falsetext[];
         static const Ch nulltext[];
@@ -1527,6 +1665,7 @@ namespace fastjson
     ///////////////////////////////////////////////////////////////////////////
     // Implementation
 
+    // Returns a common json null value.
     template<class Ch> json_value<Ch>* internal::nullval()
     {
         static json_value<Ch> val;
