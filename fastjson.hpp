@@ -179,17 +179,42 @@ namespace fastjson
             static const char lookup_hexchar[16];
         };
 
-        //! Returns a null (empty) string.
         template<class Ch>
-        Ch* nullstr() NOEXCEPT
+        struct string_tables
+        {
+            static const Ch nullstr[5];
+            static const Ch truestr[5];
+            static const Ch falsestr[6];
+        };
+
+        //! Returns an empty string.
+        template<class Ch>
+        Ch* emptystr() NOEXCEPT
         {
             static Ch nul = Ch('\0');
             return &nul;
         }
 
-        //! Returns a shared json_value that has type value_null.
+        //! Returns the 'null' string
         template<class Ch>
-        json_value<Ch>* nullval() NOEXCEPT;
+        const Ch* nullstr() NOEXCEPT
+        {
+            return string_tables<Ch>::nullstr;
+        }
+
+        //! Returns the 'true' string
+        template<class Ch>
+        const Ch* truestr() NOEXCEPT
+        {
+            return string_tables<Ch>::truestr;
+        }
+
+        //! Returns the 'false' string
+        template<class Ch>
+        const Ch* falsestr() NOEXCEPT
+        {
+            return string_tables<Ch>::falsestr;
+        }
 
         //! Measures the length of a NUL-terminated string of \c Ch characters.
         //! A null pointer returns a zero length.
@@ -731,12 +756,18 @@ namespace fastjson
             : type_(type)
             , name_(name)
             , nameend_(nameend)
-            , value_(internal::nullstr<Ch>())
-            , valueend_(internal::nullstr<Ch>())
+            , value_(internal::emptystr<Ch>())
+            , valueend_(internal::emptystr<Ch>())
             , owner_(0)
             , prev_(0)
             , next_(0)
-        {}
+        {
+            if (type == value_null)
+            {
+                value_ = (Ch*)internal::string_tables<Ch>::nullstr;
+                valueend_ = value_ + 4;
+            }
+        }
         //! Destructor
         virtual ~json_value() NOEXCEPT {}
 
@@ -798,6 +829,13 @@ namespace fastjson
         //! \brief When iterating, returns the next sibling to this value.
         const json_value<Ch>* next_sibling() const NOEXCEPT { return next_; }
 
+        //! Returns a shared json_value that has type value_null.
+        static json_value<Ch>* null() NOEXCEPT
+        {
+            static json_value<Ch> val;
+            return &val;
+        }
+
     protected:
         value_type type_;           //!< The type of this json_value object
         Ch* name_;                  //!< Pointer to the name of this json_value. name_ and nameend_ will be valid but point to an empty string if this json_value has no name.
@@ -852,7 +890,7 @@ namespace fastjson
                 }
                 p = p->next_;
             }
-            return *internal::nullval<Ch>();
+            return *json_value<Ch>::null();
         }
 
         //! \brief For a json array (or object), accesses a member by index.
@@ -872,7 +910,7 @@ namespace fastjson
             {
                 while (index-- > 0 && p) p = p->next_;
             }
-            return p ? *p : internal::nullval<Ch>();
+            return p ? *p : json_value<Ch>::null();
         }
 
         //! \brief Adds the given value to the end of the array.
@@ -1139,7 +1177,7 @@ namespace fastjson
                 *p = Ch('\0');
                 return newstr;
             }
-            return nullstr<Ch>();
+            return emptystr<Ch>();
         }
 
         //! \brief Allocates a json null value that can be used for json_object::array_add, json_object::array_insert or json_object::object_set.
@@ -1147,8 +1185,6 @@ namespace fastjson
         json_value<Ch>* allocate_null_value()
         {
             json_value<Ch>* pval = allocate_value(value_null);
-            pval->value_ = &nulltext[0];
-            pval->valueend_ = &nulltext[4];
             return pval;
         }
 
@@ -1159,13 +1195,13 @@ namespace fastjson
             json_value<Ch>* pval = allocate_value(value_bool);
             if (val)
             {
-                pval->value_ = &truetext[0];
-                pval->valueend_ = &truetext[4];
+                pval->value_ = (Ch*)internal::string_tables<Ch>::truestr;
+                pval->valueend_ = pval->value_ + 4;
             }
             else
             {
-                pval->value_ = &falsetext[0];
-                pval->valueend_ = &falsetext[5];
+                pval->value_ = (Ch*)internal::string_tables<Ch>::falsestr;
+                pval->valueend_ = pval->value_ + 5;
             }
             return pval;
         }
@@ -1225,13 +1261,13 @@ namespace fastjson
         // Uses placement new to instantiate a json_value from the memory_pool.
         json_value<Ch>* allocate_value(value_type type = value_null)
         {
-            return new (alloc(sizeof(json_value<Ch>))) json_value<Ch>(type, internal::nullstr<Ch>(), internal::nullstr<Ch>());
+            return new (alloc(sizeof(json_value<Ch>))) json_value<Ch>(type, internal::emptystr<Ch>(), internal::emptystr<Ch>());
         }
 
         // Uses placement new to instantate a json_object from the memory_pool.
         json_object<Ch>* allocate_object(value_type type)
         {
-            return new (alloc(sizeof(json_object<Ch>))) json_object<Ch>(type, internal::nullstr<Ch>(), internal::nullstr<Ch>());
+            return new (alloc(sizeof(json_object<Ch>))) json_object<Ch>(type, internal::emptystr<Ch>(), internal::emptystr<Ch>());
         }
 
         // Predicate for determining if \c ch is whitespace. Uses a look-up-table.
@@ -1645,32 +1681,11 @@ namespace fastjson
             FASTJSON_PARSE_ERROR_THIS("Expected value", text);
         }
 
-        // Pre-defined values to reduce unnecessary memory_pool allocations.
-        static const Ch truetext[];
-        static const Ch falsetext[];
-        static const Ch nulltext[];
-
         json_object<Ch>* root_;
     };
 
-    template<class Ch, class error_handler, class T_POOL> const Ch json_document<Ch, error_handler, T_POOL>::truetext =
-         = { Ch('t'), Ch('r'), Ch('u'), Ch('e'), Ch('\0') };
-
-    template<class Ch, class error_handler, class T_POOL> const Ch json_document<Ch, error_handler, T_POOL>::falsetext =
-         = { Ch('f'), Ch('a'), Ch('l'), Ch('s'), Ch('e'), Ch('\0') };
-
-    template<class Ch, class error_handler, class T_POOL> const Ch json_document<Ch, error_handler, T_POOL>::nulltext =
-         = { Ch('n'), Ch('u'), Ch('l'), Ch('l'), Ch('\0') };
-
     ///////////////////////////////////////////////////////////////////////////
     // Implementation
-
-    // Returns a common json null value.
-    template<class Ch> json_value<Ch>* internal::nullval()
-    {
-        static json_value<Ch> val;
-        return &val;
-    }
 
     namespace internal
     {
@@ -1728,6 +1743,24 @@ namespace fastjson
         const char lookup_tables<Dummy>::lookup_hexchar[16] =
         {
             '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'
+        };
+
+        template<class Ch>
+        const Ch string_tables<Ch>::nullstr[5] =
+        {
+            Ch('n'), Ch('u'), Ch('l'), Ch('l'), Ch('\0')
+        };
+
+        template<class Ch>
+        const Ch string_tables<Ch>::truestr[5] =
+        {
+            Ch('t'), Ch('r'), Ch('u'), Ch('e'), Ch('\0')
+        };
+
+        template<class Ch>
+        const Ch string_tables<Ch>::falsestr[6] =
+        {
+            Ch('f'), Ch('a'), Ch('l'), Ch('s'), Ch('e'), Ch('\0')
         };
     }
 }
