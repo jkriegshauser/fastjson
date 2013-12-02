@@ -6,5 +6,6 @@
     <ClCompile Include="test_allocator.cpp" />
     <ClCompile Include="without_exceptions.cpp" />
     <ClCompile Include="internal_tests.cpp" />
+    <ClCompile Include="parse_tests.cpp" />
   </ItemGroup>
 </Project>

@@ -477,12 +477,13 @@ namespace fastjson
         {
             if (*ptr++ != Ch('\\')) FASTJSON_PARSE_ERROR("Expected \\uXXXX", ptr - 1);
             if (*ptr++ != Ch('u')) FASTJSON_PARSE_ERROR("Expected \\uXXXX", ptr - 2);
-            wint_t c(0);
             // hex_value will throw if not a hex character
-            c |= hex_value(ptr, handler); c <<= 4; ++ptr;
-            c |= hex_value(ptr, handler); c <<= 4; ++ptr;
-            c |= hex_value(ptr, handler); c <<= 4; ++ptr;
-            c |= hex_value(ptr, handler); ++ptr;
+            wint_t c =
+				(hex_value(ptr+0, handler) << 12) |
+				(hex_value(ptr+1, handler) << 8) |
+				(hex_value(ptr+2, handler) << 4) |
+				(hex_value(ptr+3, handler));
+			ptr += 4;
             return c;
         }
 
@@ -578,11 +579,14 @@ namespace fastjson
     //! See json_document::parse() function.
     const int parse_default = 0;
 
-    const int parse_no_string_terminators = 1 << 0; //!< Don't terminate string values with NUL characters. Use json_value::nameend() to get the end of the string.
+	const int parse_no_string_terminators = 1 << 0; //!< Don't terminate string values with NUL characters. Use json_value::nameend() to get the end of the string. Mutually exclusive with parse_force_string_terminators.
 
-    const int parse_no_string_translation = 1 << 1; //!< Don't translate characters such as \\b to backspace.
+	const int parse_no_inline_translation = 1 << 1; //!< Don't translate strings in-line with the given data buffer. Instead, a copy is made and strings are fixed there.
 
-    const int parse_non_destructive = parse_no_string_terminators | parse_no_string_translation; //!< Ensures that the buffer passed to json_document::parse is not modified.
+	const int parse_force_string_terminators = 1 << 2; //<! Ensures that all strings are copied, so that translation is not inline but string terminators are present. This ensures a non-destructive parse but is less efficient than parse_non_destructive. Mutually exclusive with parse_no_string_terminators.
+
+    const int parse_non_destructive = (parse_no_string_terminators|parse_no_inline_translation); //!< Ensures that the buffer passed to json_document::parse is not modified. Does not always terminate strings; use json_value::nameend() to get the end of the string.
+	const int parse_non_destructive_nul = (parse_force_string_terminators); //!< Ensures that the buffer passed to json_document::parse is not modified. Strings are copied and NUL-terminated. Slightly less efficient than parse_non_destructive.
 
     ///////////////////////////////////////////////////////////////////////////
     // Allocator interface
@@ -1122,6 +1126,7 @@ namespace fastjson
         template<int Flags> void parse(Ch* text, error_handler handler = error_handler())
         {
             assert(text);
+			assert((Flags & (parse_no_string_terminators | parse_force_string_terminators)) != (parse_no_string_terminators | parse_force_string_terminators)); // Mutual exclusion failure.
 
             static_cast<error_handler&>(*this) = handler;
 
@@ -1162,22 +1167,24 @@ namespace fastjson
         //! \param str The string to copy. May be NULL which returns an empty string.
         //! \return A pointer to a copy of str. The destruction of this copy will happen when the json_document is destroyed.
         //! \return Will never be NULL (but the error_handler will be triggered if the memory_pool fails to allocate).
-        Ch* allocate_string(const Ch* str)
+        Ch* allocate_string(const Ch* str, std::size_t len = std::size_t(~0))
         {
             if (str)
             {
-                std::size_t len = internal::length(str);
+                if (len == std::size_t(~0))
+                {
+                    len = internal::length(str);
+                }
                 Ch* newstr = (Ch*)alloc(sizeof(Ch) * (len + 1));
                 Ch* p = newstr;
-                while (*str)
+                while (len--)
                 {
-                    *p = *str;
-                    ++p, ++str;
+                    *p++ = *str++;
                 }
                 *p = Ch('\0');
                 return newstr;
             }
-            return emptystr<Ch>();
+            return internal::emptystr<Ch>();
         }
 
         //! \brief Allocates a json null value that can be used for json_object::array_add, json_object::array_insert or json_object::object_set.
@@ -1365,10 +1372,10 @@ namespace fastjson
                     skip<whitespace_pred, Flags>(text);
 
                     // Close off the last value
-                    if ((Flags & parse_no_string_terminators) == 0)
-                    {
-                        *lastchild->valueend_ = Ch('\0');
-                    }
+					if ((Flags & (parse_no_string_terminators|parse_force_string_terminators)) == 0 && *lastchild->valueend_ != Ch('\0'))
+					{
+						*lastchild->valueend_ = Ch('\0');
+					}
                 }
                 else if (*text == Ch('}'))
                 {
@@ -1376,10 +1383,10 @@ namespace fastjson
                     ++text;
 
                     // Close off the last value
-                    if ((Flags & parse_no_string_terminators) == 0)
-                    {
-                        *lastchild->valueend_ = Ch('\0');
-                    }
+					if ((Flags & (parse_no_string_terminators|parse_force_string_terminators)) == 0 && *lastchild->valueend_ != Ch('\0'))
+					{
+						*lastchild->valueend_ = Ch('\0');
+					}
                     break;
                 }
                 else
@@ -1422,10 +1429,10 @@ namespace fastjson
                     skip<whitespace_pred, Flags>(text);
 
                     // Close off the last value
-                    if ((Flags & parse_no_string_terminators) == 0)
-                    {
-                        *lastchild->valueend_ = Ch('\0');
-                    }
+					if ((Flags & (parse_no_string_terminators|parse_force_string_terminators)) == 0 && *lastchild->valueend_ != Ch('\0'))
+					{
+						*lastchild->valueend_ = Ch('\0');
+					}
                 }
                 else if (*text == Ch(']'))
                 {
@@ -1433,10 +1440,10 @@ namespace fastjson
                     ++text;
 
                     // Close off the last value
-                    if ((Flags & parse_no_string_terminators) == 0)
-                    {
-                        *lastchild->valueend_ = Ch('\0');
-                    }
+					if ((Flags & (parse_no_string_terminators|parse_force_string_terminators)) == 0 && *lastchild->valueend_ != Ch('\0'))
+					{
+						*lastchild->valueend_ = Ch('\0');
+					}
                     break;
                 }
                 else
@@ -1447,38 +1454,122 @@ namespace fastjson
             return val;
         }
 
+		// Internal helper function for measuring a string. This must be done if copy-and-translate
+		// parse flags are used. Can trigger errors if a parse error occurs.
+		// \param text In: The start of the string; Out: will be at the end of the string.
+		// \param outlen Receives the required string length (not including NUL) for the translated string
+		// \return \c true if translation is required; false otherwise
+		template<int Flags> bool measure_string(Ch*& text, std::size_t& outlen)
+		{
+			bool translate_required = false;
+			outlen = 0;
+			for (;;)
+			{
+				switch (*text)
+				{
+				default:
+					++outlen;
+					++text;
+					break;
+
+				case Ch('\"'): // End of string
+					return translate_required;
+
+				case Ch('\\'): // Escaped character
+					translate_required = true;
+					switch (*++text)
+					{
+					default:
+						FASTJSON_PARSE_ERROR_THIS("Invalid escaped character", text);
+						break;
+
+					case Ch('"'):
+					case Ch('\\'):
+					case Ch('/'):
+					case Ch('b'): // Backspace
+					case Ch('f'): // Form feed
+					case Ch('n'): // Line feed
+					case Ch('r'): // Carriage return
+					case Ch('t'): // Tab
+						++text;
+						++outlen;
+						break;
+
+					case Ch('u'): // UTF-16 character
+						--text; // Rewind to the backslash
+						{
+							wint_t c[2];
+							c[0] = internal::read_utf16(text, static_cast<error_handler&>(*this));
+							if (c[0] >= 0xd800 && c[0] <= 0xdfff)
+							{
+								// UTF-16 surrogate pair; read the next required character
+								c[1] = internal::read_utf16(text, static_cast<error_handler&>(*this));
+								if (c[1] < 0xdc00 || c[1] > 0xdfff)
+								{
+									FASTJSON_PARSE_ERROR_THIS("Expected UTF-16 surrogate pair", text - 6);
+								}
+							}
+							// We're converting to whatever Ch is, so actually do the conversion into a dummy buffer that we can measure.
+							Ch dummy[6]; Ch* pdummy = dummy;
+							internal::from_utf16<Ch>()(c, pdummy);
+							outlen += (pdummy - dummy);
+						}
+						break;
+					}
+					break;
+
+				case Ch('\0'):
+					FASTJSON_PARSE_ERROR_THIS("Expected end-of-string '\"'", text);
+					break;
+				}
+			}
+		}
+
         // Internal helper function for parsing a json string. Advances \c text past the string.
         // \c begin and \c end receive the string pointers.
         template<int Flags> void parse_string(Ch*& text, Ch*& begin, Ch*& end)
         {
-            Ch* out = text;
-            begin = text;
+			// How strings are parsed depends heavily on flags.
+			bool translate_required = true;
+			Ch* out = text;
+			std::size_t outlen = (std::size_t)~0;
+			if ((Flags & (parse_force_string_terminators | parse_no_string_terminators | parse_no_inline_translation)) != 0)
+			{
+				// Measure the string first
+				translate_required = measure_string<Flags>(out, outlen);
+			}
+
+			if (((Flags & parse_no_string_terminators) != 0) && !translate_required)
+			{
+				// String doesn't need translation and we don't need string terminators. This is the fastest case.
+				// We can early out.
+				begin = text;
+				end = out;
+				text = (out + 1); // Skip the closing "
+				return;
+			}
+
+			if ((Flags & (parse_force_string_terminators | parse_no_inline_translation)) != 0)
+			{
+				// Must copy
+				begin = out = (Ch*)alloc(sizeof(Ch) * (outlen + 1));
+			}
+			else
+			{
+				// Can destructively do it inline
+				begin = out = text;
+			}
+
             for (;;)
             {
                 switch (*text)
                 {
                 default:
-                    if ((Flags & parse_no_string_translation) == 0)
-                    {
-                        *out++ = *text;
-                    }
-                    ++text;
+                    *out++ = *text++;
                     break;
 
                 case Ch('\"'):  // End of string
-                    end = text;
-                    if ((Flags & parse_no_string_terminators) == 0)
-                    {
-                        if ((Flags & parse_no_string_translation) == 0)
-                        {
-                            *out = Ch('\0');
-                            end = out;
-                        }
-                        else
-                        {
-                            *text = Ch('\0');
-                        }
-                    }
+                    *(end = out) = Ch('\0');
                     ++text;
                     return;
 
@@ -1492,55 +1583,31 @@ namespace fastjson
                     case Ch('"'):
                     case Ch('\\'):
                     case Ch('/'):
-                        if ((Flags & parse_no_string_translation) == 0)
-                        {
-                            *out++ = *text;
-                        }
-                        ++text;
+                        *out++ = *text++;
                         break;
 
                     case Ch('b'): // Backspace
-                        if ((Flags & parse_no_string_translation) == 0)
-                        {
-                            *out++ = Ch('\x08');
-                        }
-                        ++text;
+						*out++ = Ch('\x08'), ++text;
                         break;
 
                     case Ch('f'): // Form feed
-                        if ((Flags & parse_no_string_translation) == 0)
-                        {
-                            *out++ = Ch('\x0c');
-                        }
-                        ++text;
+						*out++ = Ch('\x0c'), ++text;
                         break;
 
                     case Ch('n'): // Line feed
-                        if ((Flags & parse_no_string_translation) == 0)
-                        {
-                            *out++ = Ch('\x0a');
-                        }
-                        ++text;
+						*out++ = Ch('\x0a'), ++text;
                         break;
 
                     case Ch('r'): // carriage return
-                        if ((Flags & parse_no_string_translation) == 0)
-                        {
-                            *out++ = Ch('\x0d');
-                        }
-                        ++text;
+						*out++ = Ch('\x0d'), ++text;
                         break;
 
                     case Ch('t'): // tab
-                        if ((Flags & parse_no_string_translation) == 0)
-                        {
-                            *out++ = Ch('\x09');
-                        }
-                        ++text;
+						*out++ = Ch('\x09'), ++text;
                         break;
 
-                    case Ch('u'): // unicode UTF-16 character
-                        --text; // revert back to the backslash
+                    case Ch('u'): // UTF-16 character
+                        --text; // Rewind to the backslash
                         {
                             wint_t c[2];
                             c[0] = internal::read_utf16(text, static_cast<error_handler&>(*this));
@@ -1553,10 +1620,7 @@ namespace fastjson
                                     FASTJSON_PARSE_ERROR_THIS("Expected UTF-16 surrogate pair", text - 6);
                                 }
                             }
-                            if ((Flags & parse_no_string_translation) == 0)
-                            {
-                                internal::from_utf16<Ch>()(c, out);
-                            }
+                            internal::from_utf16<Ch>()(c, out);
                         }
                         break;
                     }
@@ -1614,6 +1678,14 @@ namespace fastjson
             }
 
             val->valueend_ = text;
+
+			if ((Flags & parse_force_string_terminators) != 0)
+			{
+				// All strings must be null terminated. Even though this isn't a string, the value can be converted to a string and must be null terminated.
+				const std::size_t size = (val->valueend_ - val->value_);
+				val->value_ = allocate_string(val->value_, size);
+				val->valueend_ = val->value_ + size;
+			}
         }
 
         // Internal helper function for parsing a json_value.
@@ -1633,8 +1705,8 @@ namespace fastjson
                 if (text[1] == Ch('a') && text[2] == Ch('l') && text[3] == Ch('s') && text[4] == Ch('e'))
                 {
                     val = allocate_value(value_bool);
-                    val->value_ = &text[0];
-                    val->valueend_ = &text[5];
+                    val->value_ = const_cast<Ch*>(&internal::string_tables<Ch>::falsestr[0]);
+                    val->valueend_ = const_cast<Ch*>(&internal::string_tables<Ch>::falsestr[5]);
                     text += 5;
                     return val;
                 }
@@ -1644,8 +1716,8 @@ namespace fastjson
                 if (text[1] == Ch('r') && text[2] == Ch('u') && text[3] == Ch('e'))
                 {
                     val = allocate_value(value_bool);
-                    val->value_ = &text[0];
-                    val->valueend_ = &text[4];
+                    val->value_ = const_cast<Ch*>(&internal::string_tables<Ch>::truestr[0]);
+                    val->valueend_ = const_cast<Ch*>(&internal::string_tables<Ch>::truestr[4]);
                     text += 4;
                     return val;
                 }
@@ -1655,8 +1727,8 @@ namespace fastjson
                 if (text[1] == Ch('u') && text[2] == Ch('l') && text[3] == Ch('l'))
                 {
                     val = allocate_value(value_null);
-                    val->value_ = &text[0];
-                    val->valueend_ = &text[4];
+                    val->value_ = const_cast<Ch*>(&internal::string_tables<Ch>::nullstr[0]);
+                    val->valueend_ = const_cast<Ch*>(&internal::string_tables<Ch>::nullstr[4]);
                     text += 4;
                     return val;
                 }
@@ -1672,8 +1744,7 @@ namespace fastjson
 
             case Ch('"'): // String begin
                 ++text;
-                val = allocate_value();
-                val->type_ = value_string;
+                val = allocate_value(value_string);
                 parse_string<Flags>(text, val->value_, val->valueend_);
                 return val;
             }

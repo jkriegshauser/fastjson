@@ -129,6 +129,7 @@
   <ItemGroup>
     <ClCompile Include="internal_tests.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="parse_tests.cpp" />
     <ClCompile Include="without_exceptions.cpp" />
     <ClCompile Include="test_allocator.cpp" />
     <ClCompile Include="with_exceptions.cpp" />
