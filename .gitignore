@@ -1,0 +1,10 @@
+fastjson.sdf
+fastjson.v12.suo
+fastjson.vcxproj.user
+x64/
+Release/
+Debug/
+unittest/Debug/
+unittest/Release/
+unittest/x64/
+unittest/unittest.vcxproj.user
