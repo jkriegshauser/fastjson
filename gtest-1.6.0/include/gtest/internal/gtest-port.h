@@ -242,6 +242,8 @@
 # define GTEST_OS_HPUX 1
 #elif defined __native_client__
 # define GTEST_OS_NACL 1
+#elif defined __ORBIS__
+# define GTEST_OS_ORBIS 1
 #endif  // __CYGWIN__
 
 // Brings in definitions for functions used in the testing::internal::posix
@@ -265,7 +267,7 @@
 
 // Defines this to true iff Google Test can use POSIX regular expressions.
 #ifndef GTEST_HAS_POSIX_RE
-# define GTEST_HAS_POSIX_RE (!GTEST_OS_WINDOWS)
+# define GTEST_HAS_POSIX_RE (!GTEST_OS_WINDOWS && !GTEST_OS_ORBIS)
 #endif
 
 #if GTEST_HAS_POSIX_RE
@@ -417,7 +419,7 @@
 //
 // To disable threading support in Google Test, add -DGTEST_HAS_PTHREAD=0
 // to your compiler flags.
-# define GTEST_HAS_PTHREAD (GTEST_OS_LINUX || GTEST_OS_MAC || GTEST_OS_HPUX)
+# define GTEST_HAS_PTHREAD (GTEST_OS_LINUX || GTEST_OS_MAC || GTEST_OS_HPUX || GTEST_OS_ORBIS)
 #endif  // GTEST_HAS_PTHREAD
 
 #if GTEST_HAS_PTHREAD
@@ -481,7 +483,8 @@
 #  define BOOST_TR1_DETAIL_CONFIG_HPP_INCLUDED
 #  include <tuple>
 
-# elif defined(__GNUC__) && (GTEST_GCC_VER_ >= 40000)
+# elif defined(__GNUC__) && (GTEST_GCC_VER_ >= 40000) && !GTEST_OS_ORBIS
+
 // GCC 4.0+ implements tr1/tuple in the <tr1/tuple> header.  This does
 // not conform to the TR1 spec, which requires the header to be <tuple>.
 
@@ -527,7 +530,7 @@
 #ifndef GTEST_HAS_STREAM_REDIRECTION
 // By default, we assume that stream redirection is supported on all
 // platforms except known mobile ones.
-# if GTEST_OS_WINDOWS_MOBILE || GTEST_OS_SYMBIAN
+# if GTEST_OS_WINDOWS_MOBILE || GTEST_OS_SYMBIAN || GTEST_OS_ORBIS
 #  define GTEST_HAS_STREAM_REDIRECTION 0
 # else
 #  define GTEST_HAS_STREAM_REDIRECTION 1
@@ -540,7 +543,7 @@
 // pops up a dialog window that cannot be suppressed programmatically.
 #if (GTEST_OS_LINUX || GTEST_OS_MAC || GTEST_OS_CYGWIN || GTEST_OS_SOLARIS || \
      (GTEST_OS_WINDOWS_DESKTOP && _MSC_VER >= 1400) || \
-     GTEST_OS_WINDOWS_MINGW || GTEST_OS_AIX || GTEST_OS_HPUX)
+     GTEST_OS_WINDOWS_MINGW || GTEST_OS_AIX || GTEST_OS_HPUX || GTEST_OS_ORBIS)
 # define GTEST_HAS_DEATH_TEST 1
 # include <vector>  // NOLINT
 #endif
@@ -667,6 +670,18 @@
 # define GTEST_NO_INLINE_ __attribute__((noinline))
 #else
 # define GTEST_NO_INLINE_
+#endif
+
+#if GTEST_OS_ORBIS
+#define F_SETFD (2)
+inline int execve(const char*, const char* const*, const char* const*) { return (errno = ENOSYS, -1); }
+inline pid_t fork() { return (errno = ENOSYS, -1); }
+inline int chdir(const char*) { return (errno = ENOSYS, -1); }
+inline int pipe(int[2]) { return (errno = ENOSYS, -1); }
+inline int dup(int) { return (errno = ENOSYS, -1); }
+inline int dup2(int, int) { return (errno = ENOSYS, -1); }
+inline char* getenv(const char*) { return (errno = ENOSYS, (char*)NULL); }
+inline int isatty(int) { return (errno = ENOSYS, 0); }
 #endif
 
 namespace testing {
@@ -1614,7 +1629,7 @@ inline const char* StrNCpy(char* dest, const char* src, size_t n) {
 // StrError() aren't needed on Windows CE at this time and thus not
 // defined there.
 
-#if !GTEST_OS_WINDOWS_MOBILE
+#if !GTEST_OS_WINDOWS_MOBILE && !GTEST_OS_ORBIS
 inline int ChDir(const char* dir) { return chdir(dir); }
 #endif
 inline FILE* FOpen(const char* path, const char* mode) {

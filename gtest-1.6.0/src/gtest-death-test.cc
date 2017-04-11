@@ -49,7 +49,9 @@
 #  include <windows.h>
 # else
 #  include <sys/mman.h>
+# if !GTEST_OS_ORBIS
 #  include <sys/wait.h>
+# endif
 # endif  // GTEST_OS_WINDOWS
 
 #endif  // GTEST_HAS_DEATH_TEST

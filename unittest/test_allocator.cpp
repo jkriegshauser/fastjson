@@ -1,6 +1,6 @@
 #include "gtest/gtest.h"
 
-#include "fastjson.hpp"
+#include "../fastjson.hpp"
 
 TEST(fastjson_allocators, heap_allocator)
 {

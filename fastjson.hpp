@@ -146,15 +146,15 @@ namespace fastjson
 {
 
     // Forward declarations and typedefs
-    template<class Ch, class error_handler, class T_POOL> class json_document;
+    template<class Ch, class error_handler, class pool> class json_document;
     template<class Ch> class json_value;
     template<class Ch> class json_object;
     
     //! A single byte representation used by fastjson.
     typedef unsigned char byte;
-	typedef unsigned char utf8_char;
-	typedef unsigned short utf16_char;
-	typedef unsigned int utf32_char;
+    typedef unsigned char utf8_char;
+    typedef unsigned short utf16_char;
+    typedef unsigned int utf32_char;
 
     //! \brief Enumeration of value types produced by the parser.
     //! Given by the fastjson::json_value::type() function.
@@ -180,8 +180,8 @@ namespace fastjson
             static const bool lookup_digit[256];
             static const double lookup_double[10];
             static const char lookup_hexchar[16];
-			static const std::size_t utf8_lengths[64];
-			static const std::size_t encoding_sizes[5];
+            static const std::size_t utf8_lengths[64];
+            static const std::size_t encoding_sizes[5];
         };
 
         template<class Ch>
@@ -191,6 +191,9 @@ namespace fastjson
             static const Ch truestr[5];
             static const Ch falsestr[6];
         };
+
+        // Internal parse flags
+        const int parse_do_swap = 1 << 30;
 
         //! Returns an empty string.
         template<class Ch>
@@ -236,68 +239,68 @@ namespace fastjson
             return 0;
         }
 
-		// The read_helper struct performs a swap if necessary. The default implementation assumes no swap. The specialization does the swap.
-		template<bool swap>
-		struct read_helper
-		{
-			template<class Ch> static Ch read(Ch val)
-			{
-				return val;
-			}
-		};
+        // The read_helper struct performs a swap if necessary. The default implementation assumes no swap. The specialization does the swap.
+        template<bool swap>
+        struct read_helper
+        {
+            template<class Ch> static Ch read(Ch val)
+            {
+                return val;
+            }
+        };
 
-		template<>
-		struct read_helper<true>
-		{
-			template<class Ch> static Ch read(Ch val)
-			{
-				if (sizeof(Ch) == 2)
-				{
-					return (val >> 8) | (val << 8);
-				}
-				else if (sizeof(Ch) == 4)
-				{
-					byte* p = (byte*)&val;
-					std::swap(p[0], p[3]);
-					std::swap(p[1], p[2]);
-					return val;
-				}
-				else
-				{
-					assert(0); // Unsupported size for swapping
-				}
-			}
-		};
+        template<>
+        struct read_helper<true>
+        {
+            template<class Ch> static Ch read(Ch val)
+            {
+                if (sizeof(Ch) == 2)
+                {
+                    return (val >> 8) | (val << 8);
+                }
+                else if (sizeof(Ch) == 4)
+                {
+                    byte* p = (byte*)&val;
+                    std::swap(p[0], p[3]);
+                    std::swap(p[1], p[2]);
+                    return val;
+                }
+                else
+                {
+                    assert(0); // Unsupported size for swapping
+                }
+            }
+        };
 
-		template<int Flags, class Ch>
-		Ch read(Ch text)
-		{
-			return read_helper<!!(Flags & internal::parse_do_swap)>::read(text);
-		}
+        template<int Flags, class Ch>
+        Ch read(Ch text)
+        {
+            return read_helper<!!(Flags & internal::parse_do_swap)>::read(text);
+        }
 
-		//! Predicate for determining if \c ch is whitespace. Uses a look-up-table.
-		template<class Ch>
-		struct whitespace_pred
-		{
-			bool operator () (Ch ch)
-			{
-				if (sizeof(ch) > 1 && (ch < 0 || ch >= 256)) return false;
-				return lookup_tables<0>::lookup_whitespace[(byte)ch];
-			}
-		};
+        //! Predicate for determining if \c ch is whitespace. Uses a look-up-table.
+        template<class Ch>
+        struct whitespace_pred
+        {
+            bool operator () (Ch ch)
+            {
+                if (sizeof(ch) > 1 && (ch < 0 || ch >= 256)) return false;
+                return lookup_tables<0>::lookup_whitespace[(byte)ch];
+            }
+        };
 
-		//! Predicate for determining if \c ch is numeric. Uses a look-up-table.
-		template<class Ch>
-		struct digit_pred
-		{
-			bool operator () (Ch ch)
-			{
-				if (sizeof(ch) > 1 && (ch < 0 || ch >= 256)) return false;
-				return lookup_tables<0>::lookup_digit[(byte)ch];
-			}
-		};
+        //! Predicate for determining if \c ch is numeric. Uses a look-up-table.
+        template<class Ch>
+        struct digit_pred
+        {
+            bool operator () (Ch ch)
+            {
+                if (sizeof(ch) > 1 && (ch < 0 || ch >= 256)) return false;
+                return lookup_tables<0>::lookup_digit[(byte)ch];
+            }
+        };
 
-		//! Compares two strings. Assumes that \c first is NUL-terminated and
+        //! Compares two strings. Assumes that \c first is NUL-terminated and
         //! \c second is counted (\c secondend points to the first character following the string).
         //! \return 0 if strings match fully (length must match)
         //! \return -1 if first would be sorted lexicographically before second
@@ -545,337 +548,334 @@ namespace fastjson
             if (read<Flags>(*ptr++) != Ch('u')) FASTJSON_PARSE_ERROR("Expected \\uXXXX", ptr - 2);
             // hex_value will throw if not a hex character
             utf16_char c =
-				(hex_value<Flags>(ptr + 0, handler) << 12) |
-				(hex_value<Flags>(ptr + 1, handler) << 8) |
-				(hex_value<Flags>(ptr + 2, handler) << 4) |
-				(hex_value<Flags>(ptr + 3, handler));
-			ptr += 4;
+                (hex_value<Flags>(ptr + 0, handler) << 12) |
+                (hex_value<Flags>(ptr + 1, handler) << 8) |
+                (hex_value<Flags>(ptr + 2, handler) << 4) |
+                (hex_value<Flags>(ptr + 3, handler));
+            ptr += 4;
             return c;
         }
 
-		// Internal parse flags
-		const int parse_do_swap = 1 << 30;
+        // These structures provide specializations that convert between any two types of encodings (UTF-8, UTF-16 BE/LE, UTF-32 BE/LE)
+        template<int Flags, class Ch, std::size_t S = sizeof(Ch)> struct to_utf32
+        {};
 
-		// These structures provide specializations that convert between any two types of encodings (UTF-8, UTF-16 BE/LE, UTF-32 BE/LE)
-		template<int Flags, class Ch, std::size_t S = sizeof(Ch)> struct to_utf32
-		{};
+        template<int Flags, class Ch>
+        struct to_utf32<Flags, Ch, 1> // UTF-8 to UTF-32
+        {
+            template<class error_handler> static utf32_char convert(Ch*& ch, const Ch* end, error_handler handler)
+            {
+                assert(ch < end);
+                utf32_char out = 0;
+                const utf8_char* p = (const utf8_char*)ch;
+                switch (lookup_tables<0>::utf8_lengths[*p >> 2])
+                {
+                default:
+                    FASTJSON_PARSE_ERROR("Invalid UTF-8 sequence", ch);
+                    break;
 
-		template<int Flags, class Ch>
-		struct to_utf32<Flags, Ch, 1> // UTF-8 to UTF-32
-		{
-			template<class error_handler> static utf32_char convert(Ch*& ch, const Ch* end, error_handler handler)
-			{
-				assert(ch < end);
-				utf32_char out = 0;
-				const utf8_char* p = (const utf8_char*)ch;
-				switch (lookup_tables<0>::utf8_lengths[*p >> 2])
-				{
-				default:
-					FASTJSON_PARSE_ERROR("Invalid UTF-8 sequence", ch);
-					break;
+                case 1:
+                    out = utf32_char(*p);
+                    ++ch;
+                    break;
 
-				case 1:
-					out = utf32_char(*p);
-					++ch;
-					break;
+                case 2:
+                    if ((end - ch) < 2)
+                    {
+                        FASTJSON_PARSE_ERROR("Invalid UTF-8 sequence", ch);
+                    }
+                    out = utf32_char(p[0] & 0x1f) << 6;
+                    out |= utf32_char(p[1] & 0x3f);
+                    ch += 2;
+                    break;
 
-				case 2:
-					if ((end - ch) < 2)
-					{
-						FASTJSON_PARSE_ERROR("Invalid UTF-8 sequence", ch);
-					}
-					out = utf32_char(p[0] & 0x1f) << 6;
-					out |= utf32_char(p[1] & 0x3f);
-					ch += 2;
-					break;
+                case 3:
+                    if ((end - ch) < 3)
+                    {
+                        FASTJSON_PARSE_ERROR("Invalid UTF-8 sequence", ch);
+                    }
+                    out = utf32_char(p[0] & 0xf) << 12;
+                    out |= utf32_char(p[1] & 0x3f) << 6;
+                    out |= utf32_char(p[2] & 0x3f);
+                    ch += 3;
+                    break;
 
-				case 3:
-					if ((end - ch) < 3)
-					{
-						FASTJSON_PARSE_ERROR("Invalid UTF-8 sequence", ch);
-					}
-					out = utf32_char(p[0] & 0xf) << 12;
-					out |= utf32_char(p[1] & 0x3f) << 6;
-					out |= utf32_char(p[2] & 0x3f);
-					ch += 3;
-					break;
+                case 4:
+                    if ((end - ch) < 4)
+                    {
+                        FASTJSON_PARSE_ERROR("Invalid UTF-8 sequence", ch);
+                    }
+                    out = utf32_char(p[0] & 0x7) << 18;
+                    out |= utf32_char(p[1] & 0x3f) << 12;
+                    out |= utf32_char(p[2] & 0x3f) << 6;
+                    out |= utf32_char(p[3] & 0x3f);
+                    ch += 4;
+                    break;
+                }
 
-				case 4:
-					if ((end - ch) < 4)
-					{
-						FASTJSON_PARSE_ERROR("Invalid UTF-8 sequence", ch);
-					}
-					out = utf32_char(p[0] & 0x7) << 18;
-					out |= utf32_char(p[1] & 0x3f) << 12;
-					out |= utf32_char(p[2] & 0x3f) << 6;
-					out |= utf32_char(p[3] & 0x3f);
-					ch += 4;
-					break;
-				}
+                assert(out <= 0x10ffff);
+                return out;
+            }
+        };
 
-				assert(out <= 0x10ffff);
-				return out;
-			}
-		};
+        template<int Flags, class Ch>
+        struct to_utf32<Flags, Ch, 2> // UTF-16 to UTF-32
+        {
+            template<class error_handler> static utf32_char convert(Ch*& ch, const Ch* end, error_handler handler)
+            {
+                assert(ch < end);
+                utf32_char out = 0;
+                const utf16_char* p = (const utf16_char*)ch;
+                utf16_char c = read<Flags>(p[0]);
+                if (c < 0xd800 || c > 0xdfff)
+                {
+                    out = utf32_char(c);
+                    ++ch;
+                }
+                else if (c < 0xdc00)
+                {
+                    // Surrogate pair
+                    if ((end - ch) < 2)
+                    {
+                        FASTJSON_PARSE_ERROR("Invalid UTF-16 surrogate pair",ch);
+                    }
+                    utf16_char c2 = read<Flags>(p[1]);
+                    if (c2 < 0xdc00 || c2 > 0xdfff)
+                    {
+                        FASTJSON_PARSE_ERROR("Invalid UTF-16 surrogate pair", ch);
+                    }
+                    out = utf32_char(c & 0x3ff) << 10;
+                    out |= utf32_char(c & 0x3fff);
+                    out += 0x10000;
+                    ch += 2;
+                }
+                else
+                {
+                    FASTJSON_PARSE_ERROR("Invalid UTF-16 character", ch);
+                }
+                return out;
+            }
+        };
 
-		template<int Flags, class Ch>
-		struct to_utf32<Flags, Ch, 2> // UTF-16 to UTF-32
-		{
-			template<class error_handler> static utf32_char convert(Ch*& ch, const Ch* end, error_handler handler)
-			{
-				assert(ch < end);
-				utf32_char out = 0;
-				const utf16_char* p = (const utf16_char*)ch;
-				utf16_char c = read<Flags>(p[0]);
-				if (c < 0xd800 || c > 0xdfff)
-				{
-					out = utf32_char(c);
-					++ch;
-				}
-				else if (c < 0xdc00)
-				{
-					// Surrogate pair
-					if ((end - ch) < 2)
-					{
-						FASTJSON_PARSE_ERROR("Invalid UTF-16 surrogate pair",ch);
-					}
-					utf16_char c2 = read<Flags>(p[1]);
-					if (c2 < 0xdc00 || c2 > 0xdfff)
-					{
-						FASTJSON_PARSE_ERROR("Invalid UTF-16 surrogate pair", ch);
-					}
-					out = utf32_char(c & 0x3ff) << 10;
-					out |= utf32_char(c & 0x3fff);
-					out += 0x10000;
-					ch += 2;
-				}
-				else
-				{
-					FASTJSON_PARSE_ERROR("Invalid UTF-16 character", ch);
-				}
-				return out;
-			}
-		};
+        template<int Flags, class Ch>
+        struct to_utf32<Flags, Ch, 4> // UTF-32 to UTF-32
+        {
+            template<class error_handler> static utf32_char convert(Ch*& ch, const Ch* end, error_handler handler)
+            {
+                static_cast<void>(handler);
+                assert(ch < end);
+                utf32_char out = read<Flags>(*(const utf32_char*)ch);
+                ++ch;
+                return out;
+            }
+        };
 
-		template<int Flags, class Ch>
-		struct to_utf32<Flags, Ch, 4> // UTF-32 to UTF-32
-		{
-			template<class error_handler> static utf32_char convert(Ch*& ch, const Ch* end, error_handler handler)
-			{
-				static_cast<void>(handler);
-				assert(ch < end);
-				utf32_char out = read<Flags>(*(const utf32_char*)ch);
-				++ch;
-				return out;
-			}
-		};
+        template<class Ch, std::size_t S = sizeof(Ch)> struct from_utf32
+        {};
 
-		template<class Ch, std::size_t S = sizeof(Ch)> struct from_utf32
-		{};
+        template<class Ch>
+        struct from_utf32<Ch, 1>
+        {
+            template<class error_handler> static void convert(utf32_char c, Ch*& out, const Ch* end, error_handler handler)
+            {
+                static_cast<void>(handler);
+                assert(out < end);
+                if (c <= 0x7f)
+                {
+                    *out++ = Ch(c);
+                }
+                else if (c <= 0x7ff)
+                {
+                    assert((end - out) >= 2);
+                    *out++ = Ch(0xc0 + ((c >> 6) & 0x3f));
+                    *out++ = Ch(0x80 + ( c       & 0x3f));
+                }
+                else if (c < 0x10000)
+                {
+                    assert((end - out) >= 3);
+                    *out++ = Ch(0xe0 + ((c >> 12) & 0x0f));
+                    *out++ = Ch(0x80 + ((c >> 6)  & 0x3f));
+                    *out++ = Ch(0x80 + ( c        & 0x3f));
+                }
+                else
+                {
+                    assert((end - out) >= 4);
+                    *out++ = Ch(0xf0 + ((c >> 18) & 0x07));
+                    *out++ = Ch(0x80 + ((c >> 12) & 0x3f));
+                    *out++ = Ch(0x80 + ((c >> 6)  & 0x3f));
+                    *out++ = Ch(0x80 + ( c        & 0x3f));
+                }
+            }
+        };
 
-		template<class Ch>
-		struct from_utf32<Ch, 1>
-		{
-			template<class error_handler> static void convert(utf32_char c, Ch*& out, const Ch* end, error_handler handler)
-			{
-				static_cast<void>(handler);
-				assert(out < end);
-				if (c <= 0x7f)
-				{
-					*out++ = Ch(c);
-				}
-				else if (c <= 0x7ff)
-				{
-					assert((end - out) >= 2);
-					*out++ = Ch(0xc0 + ((c >> 6) & 0x3f));
-					*out++ = Ch(0x80 + ( c       & 0x3f));
-				}
-				else if (c < 0x10000)
-				{
-					assert((end - out) >= 3);
-					*out++ = Ch(0xe0 + ((c >> 12) & 0x0f));
-					*out++ = Ch(0x80 + ((c >> 6)  & 0x3f));
-					*out++ = Ch(0x80 + ( c        & 0x3f));
-				}
-				else
-				{
-					assert((end - out) >= 4);
-					*out++ = Ch(0xf0 + ((c >> 18) & 0x07));
-					*out++ = Ch(0x80 + ((c >> 12) & 0x3f));
-					*out++ = Ch(0x80 + ((c >> 6)  & 0x3f));
-					*out++ = Ch(0x80 + ( c        & 0x3f));
-				}
-			}
-		};
+        template<class Ch>
+        struct from_utf32<Ch, 2>
+        {
+            template<class error_handler> static void convert(utf32_char c, Ch*& out, const Ch* end, error_handler handler)
+            {
+                static_cast<void>(handler);
+                assert(out < end);
+                if (c < 0x10000)
+                {
+                    assert(c < 0xd800 || c > 0xdfff);
+                    *out++ = Ch(c);
+                }
+                else
+                {
+                    assert((end - out) >= 2);
+                    c -= 0x10000;
+                    *out++ = Ch(0xd800 | (c >> 10));
+                    *out++ = Ch(0xdc00 | (c & 0x3ff));
+                }
+            }
+        };
 
-		template<class Ch>
-		struct from_utf32<Ch, 2>
-		{
-			template<class error_handler> static void convert(utf32_char c, Ch*& out, const Ch* end, error_handler handler)
-			{
-				static_cast<void>(handler);
-				assert(out < end);
-				if (c < 0x10000)
-				{
-					assert(c < 0xd800 || c > 0xdfff);
-					*out++ = Ch(c);
-				}
-				else
-				{
-					assert((end - out) >= 2);
-					c -= 0x10000;
-					*out++ = Ch(0xd800 | (c >> 10));
-					*out++ = Ch(0xdc00 | (c & 0x3ff));
-				}
-			}
-		};
+        template<class Ch>
+        struct from_utf32<Ch, 4>
+        {
+            template<class error_handler> static void convert(utf32_char c, Ch*& out, const Ch* end, error_handler handler)
+            {
+                static_cast<void>(handler);
+                assert(out < end);
+                *out++ = c;
+            }
+        };
 
-		template<class Ch>
-		struct from_utf32<Ch, 4>
-		{
-			template<class error_handler> static void convert(utf32_char c, Ch*& out, const Ch* end, error_handler handler)
-			{
-				static_cast<void>(handler);
-				assert(out < end);
-				*out++ = c;
-			}
-		};
+        template<int Flags, class ChIn, class ChOut, std::size_t SIn = sizeof(ChIn), std::size_t SOut = sizeof(ChOut)>
+        struct unicode_converter
+        {
+            template<class error_handler> static void convert(ChIn*& in, const ChIn* end, ChOut*& out, const ChOut* outend, error_handler handler)
+            {
+                const utf32_char c = to_utf32<Flags, ChIn>::convert(in, end, handler);
+                from_utf32<ChOut>::convert(c, out, outend, handler);
+            }
+            template<class error_handler> static std::size_t measure(ChIn*& in, const ChIn* end, error_handler handler)
+            {
+                const utf32_char c = to_utf32<Flags, ChIn>::convert(in, end, handler);
+                ChOut buf[6];
+                ChOut* p = buf;
+                // Do the conversion to actually measure
+                from_utf32<ChOut>::convert(c, p, &buf[6], handler);
+                return p - buf;
+            }
+        };
 
-		template<int Flags, class ChIn, class ChOut, std::size_t SIn = sizeof(ChIn), std::size_t SOut = sizeof(ChOut)>
-		struct unicode_converter
-		{
-			template<class error_handler> static void convert(ChIn*& in, const ChIn* end, ChOut*& out, const ChOut* outend, error_handler handler)
-			{
-				const utf32_char c = to_utf32<Flags, ChIn>::convert(in, end, handler);
-				from_utf32<ChOut>::convert(c, out, outend, handler);
-			}
-			template<class error_handler> static std::size_t measure(ChIn*& in, const ChIn* end, error_handler handler)
-			{
-				const utf32_char c = to_utf32<Flags, ChIn>::convert(in, end, handler);
-				ChOut buf[6];
-				ChOut* p = buf;
-				// Do the conversion to actually measure
-				from_utf32<ChOut>::convert(c, p, &buf[6], handler);
-				return p - buf;
-			}
-		};
+        template<int Flags, class ChIn, class ChOut>
+        struct unicode_converter<Flags, ChIn, ChOut, 1, 1> // UTF-8 to UTF-8 converter
+        {
+            template<class error_handler> static void convert(ChIn*& in, const ChIn* end, ChOut*& out, const ChOut* outend, error_handler handler)
+            {
+                assert(in != end);
+                const utf8_char* p = (const utf8_char*)in;
+                utf8_char c = read<Flags>(p[0]);
+                const std::size_t size = lookup_tables<0>::utf8_lengths[c >> 2];
+                if (size == 0 || (in + size) > end)
+                {
+                    FASTJSON_PARSE_ERROR("Invalid UTF-8 sequence", in);
+                }
+                assert((std::size_t)(outend - out) >= size);
 
-		template<int Flags, class ChIn, class ChOut>
-		struct unicode_converter<Flags, ChIn, ChOut, 1, 1> // UTF-8 to UTF-8 converter
-		{
-			template<class error_handler> static void convert(ChIn*& in, const ChIn* end, ChOut*& out, const ChOut* outend, error_handler handler)
-			{
-				assert(in != end);
-				const utf8_char* p = (const utf8_char*)in;
-				utf8_char c = read<Flags>(p[0]);
-				const std::size_t size = lookup_tables<0>::utf8_lengths[c >> 2];
-				if (size == 0 || (in + size) > end)
-				{
-					FASTJSON_PARSE_ERROR("Invalid UTF-8 sequence", in);
-				}
-				assert((std::size_t)(outend - out) >= size);
+                switch (size)
+                {
+                default:
+                    FASTJSON_PARSE_ERROR("Invalid UTF-8 sequence", in);
+                    break;
 
-				switch (size)
-				{
-				default:
-					FASTJSON_PARSE_ERROR("Invalid UTF-8 sequence", in);
-					break;
+                case 4: *out++ = ChOut(read<Flags>(*in++)); // Fall through
+                case 3: *out++ = ChOut(read<Flags>(*in++)); // Fall through
+                case 2: *out++ = ChOut(read<Flags>(*in++)); // Fall through
+                case 1: *out++ = ChOut(read<Flags>(*in++)); // Fall through
+                }
+            }
+            template<class error_handler> static std::size_t measure(ChIn*& in, const ChIn* end, error_handler handler)
+            {
+                assert(in != end);
+                const utf8_char* p = (const utf8_char*)in;
+                const std::size_t size = lookup_tables<0>::utf8_lengths[read<Flags>(*p) >> 2];
+                if (size == 0 || (std::size_t)(end - in) < size)
+                {
+                    FASTJSON_PARSE_ERROR("Invalid UTF-8 sequence", in);
+                }
+                in += size;
+                return size;
+            }
+        };
 
-				case 4:	*out++ = ChOut(read<Flags>(*in++)); // Fall through
-				case 3:	*out++ = ChOut(read<Flags>(*in++)); // Fall through
-				case 2:	*out++ = ChOut(read<Flags>(*in++)); // Fall through
-				case 1:	*out++ = ChOut(read<Flags>(*in++)); // Fall through
-				}
-			}
-			template<class error_handler> static std::size_t measure(ChIn*& in, const ChIn* end, error_handler handler)
-			{
-				assert(in != end);
-				const utf8_char* p = (const utf8_char*)in;
-				const std::size_t size = lookup_tables<0>::utf8_lengths[read<Flags>(*p) >> 2];
-				if (size == 0 || (std::size_t)(end - in) < size)
-				{
-					FASTJSON_PARSE_ERROR("Invalid UTF-8 sequence", in);
-				}
-				in += size;
-				return size;
-			}
-		};
+        template<int Flags, class ChIn, class ChOut>
+        struct unicode_converter<Flags, ChIn, ChOut, 2, 2> // UTF-16 to UTF-16 converter
+        {
+            template<class error_handler> static void convert(ChIn*& in, const ChIn* end, ChOut*& out, const ChOut* outend, error_handler handler)
+            {
+                assert(in != end); assert(out != outend);
+                const utf16_char* p = (const utf16_char*)in;
+                utf16_char c = read<Flags>(*p);
+                *out++ = (ChOut)c;
 
-		template<int Flags, class ChIn, class ChOut>
-		struct unicode_converter<Flags, ChIn, ChOut, 2, 2> // UTF-16 to UTF-16 converter
-		{
-			template<class error_handler> static void convert(ChIn*& in, const ChIn* end, ChOut*& out, const ChOut* outend, error_handler handler)
-			{
-				assert(in != end); assert(out != outend);
-				const utf16_char* p = (const utf16_char*)in;
-				utf16_char c = read<Flags>(*p);
-				*out++ = (ChOut)c;
+                ++in;
+                if (c >= 0xd800 && c < 0xdc00)
+                {
+                    assert(in != end);
+                    assert(out != outend);
+                    c = read<Flags>(p[1]);
+                    if (c < 0xdc00 || c > 0xdfff)
+                    {
+                        FASTJSON_PARSE_ERROR("Invalid UTF-16 surrogate pair", in);
+                    }
+                    *out++ = c;
+                    ++in;
+                }
+            }
+            template<class error_handler> static std::size_t measure(ChIn*& in, const ChIn* end, error_handler handler)
+            {
+                assert(in != end);
+                const utf16_char* p = (const utf16_char*)in;
+                ++in;
+                utf16_char c = read<Flags>(p[0]);
+                if (c >= 0xd800 && c < 0xdc00)
+                {
+                    assert(in != end);
+                    c = read<Flags>(p[1]);
+                    if (c < 0xdc00 || c > 0xdfff)
+                    {
+                        FASTJSON_PARSE_ERROR("Invalid UTF-16 surrogate pair", in);
+                    }
+                    ++in;
+                    return 2;
+                }
+                return 1;
+            }
+        };
 
-				++in;
-				if (c >= 0xd800 && c < 0xdc00)
-				{
-					assert(in != end);
-					assert(out != outend);
-					c = read<Flags>(p[1]);
-					if (c < 0xdc00 || c > 0xdfff)
-					{
-						FASTJSON_PARSE_ERROR("Invalid UTF-16 surrogate pair", in);
-					}
-					*out++ = c;
-					++in;
-				}
-			}
-			template<class error_handler> static std::size_t measure(ChIn*& in, const ChIn* end, error_handler handler)
-			{
-				assert(in != end);
-				const utf16_char* p = (const utf16_char*)in;
-				++in;
-				utf16_char c = read<Flags>(p[0]);
-				if (c >= 0xd800 && c < 0xdc00)
-				{
-					assert(in != end);
-					c = read<Flags>(p[1]);
-					if (c < 0xdc00 || c > 0xdfff)
-					{
-						FASTJSON_PARSE_ERROR("Invalid UTF-16 surrogate pair", in);
-					}
-					++in;
-					return 2;
-				}
-				return 1;
-			}
-		};
+        template<int Flags, class ChIn, class ChOut>
+        struct unicode_converter<Flags, ChIn, ChOut, 4, 4> // UTF-32 to UTF-32 converter
+        {
+            template<class error_handler> static void convert(ChIn*& in, const ChIn* end, ChOut*& out, const ChOut* outend, error_handler handler)
+            {
+                static_cast<void>(handler);
+                assert(in != end);
+                assert(out != outend);
+                *out++ = ChOut(read<Flags>(*in++));
+            }
+            template<class error_handler> static std::size_t measure(ChIn*& in, const ChIn* end, error_handler handler)
+            {
+                static_cast<void>(handler);
+                assert(in != end);
+                ++in;
+                return 1;
+            }
+        };
 
-		template<int Flags, class ChIn, class ChOut>
-		struct unicode_converter<Flags, ChIn, ChOut, 4, 4> // UTF-32 to UTF-32 converter
-		{
-			template<class error_handler> static void convert(ChIn*& in, const ChIn* end, ChOut*& out, const ChOut* outend, error_handler handler)
-			{
-				static_cast<void>(handler);
-				assert(in != end);
-				assert(out != outend);
-				*out++ = ChOut(read<Flags>(*in++));
-			}
-			template<class error_handler> static std::size_t measure(ChIn*& in, const ChIn* end, error_handler handler)
-			{
-				static_cast<void>(handler);
-				assert(in != end);
-				++in;
-				return 1;
-			}
-		};
+        template<int Flags, class ChIn, class ChOut, class error_handler>
+        void convert(ChIn*& in, const ChIn* end, ChOut*& out, const ChOut* outend, error_handler handler)
+        {
+            unicode_converter<Flags, ChIn, ChOut>::convert(in, end, out, outend, handler);
+        }
 
-		template<int Flags, class ChIn, class ChOut, class error_handler>
-		void convert(ChIn*& in, const ChIn* end, ChOut*& out, const ChOut* outend, error_handler handler)
-		{
-			unicode_converter<Flags, ChIn, ChOut>::convert(in, end, out, outend, handler);
-		}
-
-		template<int Flags, class ChOut, class ChIn, class error_handler>
-		std::size_t measure(ChIn*& in, const ChIn* end, error_handler handler)
-		{
-			return unicode_converter<Flags, ChIn, ChOut>::measure(in, end, handler);
-		}
+        template<int Flags, class ChOut, class ChIn, class error_handler>
+        std::size_t measure(ChIn*& in, const ChIn* end, error_handler handler)
+        {
+            return unicode_converter<Flags, ChIn, ChOut>::measure(in, end, handler);
+        }
     
     } // namespace internal
 
@@ -889,14 +889,14 @@ namespace fastjson
     //! See json_document::parse() function.
     const int parse_default = 0;
 
-	const int parse_no_string_terminators = 1 << 0; //!< Don't terminate string values with NUL characters. Use json_value::nameend() to get the end of the string. Mutually exclusive with parse_force_string_terminators.
+    const int parse_no_string_terminators = 1 << 0; //!< Don't terminate string values with NUL characters. Use json_value::nameend() to get the end of the string. Mutually exclusive with parse_force_string_terminators.
 
-	const int parse_no_inline_translation = 1 << 1; //!< Don't translate strings in-line with the given data buffer. Instead, a copy is made and strings are fixed there.
+    const int parse_no_inline_translation = 1 << 1; //!< Don't translate strings in-line with the given data buffer. Instead, a copy is made and strings are fixed there.
 
-	const int parse_force_string_terminators = 1 << 2; //<! Ensures that all strings are copied, so that translation is not inline but string terminators are present. This ensures a non-destructive parse but is less efficient than parse_non_destructive. Mutually exclusive with parse_no_string_terminators.
+    const int parse_force_string_terminators = 1 << 2; //<! Ensures that all strings are copied, so that translation is not inline but string terminators are present. This ensures a non-destructive parse but is less efficient than parse_non_destructive. Mutually exclusive with parse_no_string_terminators.
 
     const int parse_non_destructive = (parse_no_string_terminators|parse_no_inline_translation); //!< Ensures that the buffer passed to json_document::parse is not modified. Does not always terminate strings; use json_value::nameend() to get the end of the string.
-	const int parse_non_destructive_nul = (parse_force_string_terminators); //!< Ensures that the buffer passed to json_document::parse is not modified. Strings are copied and NUL-terminated. Slightly less efficient than parse_non_destructive.
+    const int parse_non_destructive_nul = (parse_force_string_terminators); //!< Ensures that the buffer passed to json_document::parse is not modified. Strings are copied and NUL-terminated. Slightly less efficient than parse_non_destructive.
 
     ///////////////////////////////////////////////////////////////////////////
     // Allocator interface
@@ -963,6 +963,7 @@ namespace fastjson
     template<class T_ALLOC = default_allocator, std::size_t static_size = FASTJSON_STATIC_POOL_SIZE, std::size_t dynamic_size = FASTJSON_DYNAMIC_POOL_SIZE>
     class memory_pool : public T_ALLOC, public static_pool<static_size>
     {
+        typedef static_pool<static_size> pool_type;
     public:
         //! Constructor
         memory_pool() NOEXCEPT { init(); }
@@ -973,10 +974,10 @@ namespace fastjson
         //! \brief Clears all allocations from this memory pool back to the heap.
         void clear()
         {
-            while (pool_ != static_pool_start())
+            while (pool_ != pool_type::static_pool_start())
             {
                 byte* next = reinterpret_cast<header*>(align_forward(pool_))->next_pool_;
-                raw_heap_free(pool_);
+                T_ALLOC::raw_heap_free(pool_);
                 pool_ = next;
             }
         }
@@ -1006,9 +1007,9 @@ namespace fastjson
         //! \brief Initializes the memory pool.
         void init() NOEXCEPT
         {
-            pool_ = static_pool_start();
+            pool_ = pool_type::static_pool_start();
             next_ = align_forward(pool_);
-            end_ = static_pool_end();
+            end_ = pool_type::static_pool_end();
             assert(next_ <= end_);
         }
 
@@ -1029,7 +1030,7 @@ namespace fastjson
             size += (FASTJSON_ALIGNMENT * 2);
             size += sizeof(header);
 
-            byte* pool = raw_heap_alloc(size);
+            byte* pool = T_ALLOC::raw_heap_alloc(size);
             if (pool == 0)
             {
                 return false;
@@ -1062,8 +1063,8 @@ namespace fastjson
     template<class Ch = char>
     class json_value
     {
-        template<class Ch, class error_handler, class T_POOL> friend class json_document;
-        template<class Ch> friend class json_object;
+        template<class Ch_, class error_handler, class pool> friend class json_document;
+        friend class json_object<Ch>;
 
         //! Constructor. Values may only be created by the json_document.
         json_value(value_type type = value_null, Ch* name = 0, Ch* nameend = 0) NOEXCEPT
@@ -1129,7 +1130,7 @@ namespace fastjson
         //! A null value, false boolean value or a zero value will return 0.0.
         //! A non-zero numeric value or a true boolean value will return true.
         //! String values return true for "true" and non-zero numeric representations. All other string values return false.
-        bool   as_boolean() const { return internal::value_to_bool(value_, valueend_); }
+        bool   as_boolean() const { return internal::value_to_boolean(value_, valueend_); }
 
         //! \brief Queries the array interface if the value is an array or an object.
         json_object<Ch>* as_array() NOEXCEPT { return is_array()|is_object() ? static_cast<json_object<Ch>*>(this) : 0; }
@@ -1166,7 +1167,7 @@ namespace fastjson
     template<class Ch = char>
     class json_object : public json_value<Ch>
     {
-        template<class Ch, class error_handler, class T_POOL> friend class json_document;
+        template<class Ch_, class error_handler, class pool> friend class json_document;
 
     public:
         //! \brief Constructor
@@ -1194,7 +1195,7 @@ namespace fastjson
         //! If the value does not exist, a json_value of type value_null is returned.
         const json_value<Ch>& operator [] (const Ch* name) const NOEXCEPT
         {
-            assert(type_ == value_object);
+            assert(this->type_ == value_object);
             const json_value<Ch>* p = child_;
             while (p)
             {
@@ -1232,7 +1233,7 @@ namespace fastjson
         //! \return true if the json_value was added. Returns false if not an array or \c val is a NULL pointer or already exists in an array or object.
         bool array_add(json_value<Ch>* val) NOEXCEPT
         {
-            if (!is_array() || val == 0 || val->owner_ != 0) return false;
+            if (!this->is_array() || val == 0 || val->owner_ != 0) return false;
             add_child(val);
             return true;
         }
@@ -1245,7 +1246,7 @@ namespace fastjson
         bool array_insert(json_value<Ch>* val, int index) NOEXCEPT
         {
             assert(val->owner_ == 0);
-            if (!is_array() || val == 0 || val->owner_ != 0) return false;
+            if (!this->is_array() || val == 0 || val->owner_ != 0) return false;
             json_value<Ch>** pp;
             if (index < 0)
             {
@@ -1281,7 +1282,7 @@ namespace fastjson
         //! \return the removed value. It may be re-added by using array_add or array_insert. If the array is empty, NULL is returned. The returned value will be automatically destroyed when the json_document that constructed it is destroyed.
         json_value<Ch>* array_remove(int index) NOEXCEPT
         {
-            if (!is_array()) return 0;
+            if (!this->is_array()) return 0;
             json_value<Ch>* p;
             if (index < 0)
             {
@@ -1319,7 +1320,7 @@ namespace fastjson
         bool object_set(const Ch* name, json_value<Ch>* val, json_value<Ch>** old = 0) NOEXCEPT
         {
             if (old) *old = 0;
-            if (!is_object()) return false;
+            if (!this->is_object()) return false;
             if (name == 0 || *name == Ch('\0')) return false;
             if (val == 0 || val->owner_ != 0) return false;
             val->name_ = name;
@@ -1342,7 +1343,7 @@ namespace fastjson
             }
             if (*pp == 0)
             {
-                add_child(child);
+                add_child(val);
             }
             return true;
         }
@@ -1353,7 +1354,7 @@ namespace fastjson
         //! \return The removed json_value object if found. NULL if nothing was found. The returned json_value will be automatically destroyed when the json_document that constructed it is destroyed.
         json_value<Ch>* object_remove(const Ch* name) NOEXCEPT
         {
-            if (!is_object()) return 0;
+            if (!this->is_object()) return 0;
             if (name == 0 || *name == Ch('\0')) return false;
             json_value<Ch>* p = child_;
             while (p)
@@ -1415,81 +1416,90 @@ namespace fastjson
     //! \brief The main workhorse of the fastjson library.
     //! \tparam Ch The character type to use. Determines whether UTF-8, UTF-16 or UTF-32 encoding is used. The document is converted to the best size-matching encoding.
     //! \tparam error_handler The functor class that will be handling errors. A concrete instance can be passed to the parse() function.
-    //! \tparam T_POOL Allows overriding the memory pool for this json_document object. See memory_pool for more information.
-    template<class Ch = char, class error_handler = default_error_handler, class T_POOL = memory_pool<> >
-    class json_document : protected T_POOL, protected error_handler
+    //! \tparam pool Allows overriding the memory pool for this json_document object. See memory_pool for more information.
+    template<class Ch = char, class error_handler = default_error_handler, class pool = memory_pool<> >
+    class json_document : protected pool, protected error_handler
     {
         //! Disable copy constructor and assignment
         json_document(const json_document&);
         json_document& operator = (const json_document&);
 
     public:
+        typedef Ch char_t;
+        typedef error_handler error_handler_t;
+        typedef pool pool_t;
+
         //! Constructor
         json_document()
             : root_(allocate_object())
         {}
 
-		enum encoding
-		{
-			unknown = -1,	//!< Unknown encoding; must be determined by parser
+        json_document(error_handler_t handler)
+            : error_handler(handler)
+            , root_(allocate_object())
+        {}
 
-			utf8,		//!< UTF-8 encoding
-			utf16,		//!< UTF-16 encoding using native endianness
-			utf16_swap,	//!< UTF-16 encoding using non-native endianness
-			utf32,		//!< UTF-32 encoding using native endianness
-			utf32_swap,	//!< UTF-32 encoding using non-native endianness
+        error_handler_t& get_error_handler() { return *this; }
+        const error_handler_t& get_error_handler() const { return *this; }
 
-			num_encoding//!< Count of encoding values
-		};
+        enum encoding
+        {
+            unknown = -1,   //!< Unknown encoding; must be determined by parser
 
-		//! \brief Parses a json document.
+            utf8,       //!< UTF-8 encoding
+            utf16,      //!< UTF-16 encoding using native endianness
+            utf16_swap, //!< UTF-16 encoding using non-native endianness
+            utf32,      //!< UTF-32 encoding using native endianness
+            utf32_swap, //!< UTF-32 encoding using non-native endianness
+
+            num_encoding//!< Count of encoding values
+        };
+
+        //! \brief Parses a json document.
         //! \tparam Flags The flags to use when parsing.
         //! \param data The json data to process. The parse() function will automatically determine encoding (utf-8, utf-16 big-endian/little-endian, utf-32 big-endian/little-endian).
-		//! \param num_bytes The size of \c data in bytes. The default (-1) indicates that the data is NUL-terminated. Required if \c enc is \c unknown.
-		//! \param enc The type of character encoding used by data. If \c unknown is specified, \c num_bytes must be a value other than (-1).
-        //! \param handler An optional instance of the error handler. See default_error_handler for default behavior.
-		template<int Flags> void parse(void* data, std::size_t num_bytes = std::size_t(-1), encoding enc = unknown, error_handler handler = error_handler())
-		{
-			// Must set the handler before throwing any errors
-			static_cast<error_handler&>(*this) = handler;
+        //! \param num_bytes The size of \c data in bytes. The default (-1) indicates that the data is NUL-terminated. Required if \c enc is \c unknown.
+        //! \param enc The type of character encoding used by data. If \c unknown is specified, \c num_bytes must be a value other than (-1).
+        template<int Flags> void parse(void* data, std::size_t num_bytes = std::size_t(-1), encoding enc = unknown)
+        {
+            assert((Flags & (parse_no_string_terminators | parse_force_string_terminators)) != (parse_no_string_terminators | parse_force_string_terminators)); // Mutual exclusion failure.
+            assert(enc >= unknown && enc < num_encoding); // Invalid encoding value
+            assert(enc != unknown || num_bytes != std::size_t(-1)); // Encoding must be known if NUL-terminated.
 
-			assert((Flags & (parse_no_string_terminators | parse_force_string_terminators)) != (parse_no_string_terminators | parse_force_string_terminators)); // Mutual exclusion failure.
-			assert(enc >= unknown && enc < num_encoding); // Invalid encoding value
-			assert(enc != unknown || num_bytes != std::size_t(-1)); // Encoding must be known if NUL-terminated.
+            if (data == NULL || num_bytes == 0)
+            {
+                FASTJSON_PARSE_ERROR_THIS("Expected '{' or '['", data);
+            }
 
-			if (data == NULL || num_bytes == 0)
-			{
-				FASTJSON_PARSE_ERROR_THIS("Expected '{' or '['", data);
-			}
+            if(enc == unknown)
+            {
+                // May throw an error
+                enc = determine_encoding<Flags>((byte*)data, num_bytes);
+            }
+            assert(enc != unknown);
 
-			if(enc == unknown)
-			{
-				// May throw an error
-				enc = determine_encoding<Flags>((byte*)data, num_bytes);
-			}
-			assert(enc != unknown);
+            // Compute the end
+            const byte* end = ((byte*)data) + num_bytes;
+            if (end < data)
+            {
+                assert(sizeof(byte*) == sizeof(std::size_t));
+                std::size_t end_num = std::size_t(-1);
+                const std::size_t size = internal::lookup_tables<0>::encoding_sizes[enc];
+                end_num &= ~(size-1); // Round to encoding size
+                end_num += (std::size_t(data) & (size-1)); // Account for mis-alignment
+                end = (byte*)end_num;
+            }
 
-			// Compute the end
-			const byte* end = ((byte*)data) + num_bytes;
-			if (end < data)
-			{
-				assert(sizeof(byte*) == sizeof(std::size_t));
-				std::size_t end_num = std::size_t(-1);
-				const std::size_t size = internal::lookup_tables<0>::encoding_sizes[enc];
-				end_num &= ~(size-1); // Round to encoding size
-				end_num += (std::size_t(data) & (size-1)); // Account for mis-alignment
-				end = (byte*)end_num;
-			}
-
-			switch (enc)
-			{
-			case utf8:	parse_internal<Flags>((utf8_char*)data, (utf8_char*)end); break;
-			case utf16: parse_internal<Flags>((utf16_char*)data, (utf16_char*)end); break;
-			case utf16_swap: parse_internal<Flags | internal::parse_do_swap>((utf16_char*)data, (utf16_char*)end); break;
-			case utf32: parse_internal<Flags>((utf32_char*)data, (utf32_char*)end); break;
-			case utf32_swap: parse_internal<Flags | internal::parse_do_swap>((utf32_char*)data, (utf32_char*)end); break;
-			}
-		}
+            switch (enc)
+            {
+            case utf8:  parse_internal<Flags>((utf8_char*)data, (utf8_char*)end); break;
+            case utf16: parse_internal<Flags>((utf16_char*)data, (utf16_char*)end); break;
+            case utf16_swap: parse_internal<Flags | internal::parse_do_swap>((utf16_char*)data, (utf16_char*)end); break;
+            case utf32: parse_internal<Flags>((utf32_char*)data, (utf32_char*)end); break;
+            case utf32_swap: parse_internal<Flags | internal::parse_do_swap>((utf32_char*)data, (utf32_char*)end); break;
+            default: FASTJSON_PARSE_ERROR_THIS("Unknown encoding type", data);
+            }
+        }
 
         //! \brief Returns the const root json_object for this document.
         //! \return The const root json_object for this document. For a newly-constructed json_document, this is an empty json_object of type value_object.
@@ -1602,44 +1612,44 @@ namespace fastjson
         }
 
     private:
-		template<int Flags> encoding determine_encoding(byte* data, const std::size_t num_bytes)
-		{
-			if(num_bytes == std::size_t(-1))
-			{
-				FASTJSON_PARSE_ERROR_THIS("Encoding must be specified with NUL-terminated data", data);
-			}
+        template<int Flags> encoding determine_encoding(byte* data, const std::size_t num_bytes)
+        {
+            if(num_bytes == std::size_t(-1))
+            {
+                FASTJSON_PARSE_ERROR_THIS("Encoding must be specified with NUL-terminated data", data);
+            }
 
-			const std::size_t m = num_bytes % 4;
-			if (m != 2 && m != 0)
-			{
-				// Odd number of bytes; must be UTF-8.
-				return utf8;
-			}
+            const std::size_t m = num_bytes % 4;
+            if (m != 2 && m != 0)
+            {
+                // Odd number of bytes; must be UTF-8.
+                return utf8;
+            }
 
-			assert(sizeof(utf16_char) == 2); // Test assumption
-			assert(sizeof(utf32_char) == 4); // Test assumption
-			const utf8_char*  cutf8  = (const utf8_char*) data;
-			const utf16_char* cutf16 = (const utf16_char*)data;
-			const utf32_char* cutf32 = (const utf32_char*)data;
+            assert(sizeof(utf16_char) == 2); // Test assumption
+            assert(sizeof(utf32_char) == 4); // Test assumption
+            const utf8_char*  cutf8  = (const utf8_char*) data;
+            const utf16_char* cutf16 = (const utf16_char*)data;
+            const utf32_char* cutf32 = (const utf32_char*)data;
 
-			// May still be UTF-8; need to check both bytes
-			if (cutf8[0] && cutf8[1])
-			{
-				return utf8;
-			}
+            // May still be UTF-8; need to check both bytes
+            if (cutf8[0] && cutf8[1])
+            {
+                return utf8;
+            }
 
-			if (cutf16[0] && cutf16[1])
-			{
-				// Must be UTF-16
-				return cutf16[0] < 256 ? utf16 : utf16_swap;
-			}
+            if (cutf16[0] && cutf16[1])
+            {
+                // Must be UTF-16
+                return cutf16[0] < 256 ? utf16 : utf16_swap;
+            }
 
-			if (cutf32[0] == 0)
-			{
-				FASTJSON_PARSE_ERROR_THIS("Unable to determine encoding", data);
-			}
-			return cutf32[0] < 256 ? utf32 : utf32_swap;
-		}
+            if (cutf32[0] == 0)
+            {
+                FASTJSON_PARSE_ERROR_THIS("Unable to determine encoding", data);
+            }
+            return cutf32[0] < 256 ? utf32 : utf32_swap;
+        }
 
         // Uses placement new to instantiate a json_value from the memory_pool.
         json_value<Ch>* allocate_value(value_type type = value_null)
@@ -1647,17 +1657,17 @@ namespace fastjson
             return new (alloc(sizeof(json_value<Ch>))) json_value<Ch>(type, internal::emptystr<Ch>(), internal::emptystr<Ch>());
         }
 
-        // Uses placement new to instantate a json_object from the memory_pool.
+        // Uses placement new to instantiate a json_object from the memory_pool.
         json_object<Ch>* allocate_object(value_type type)
         {
             return new (alloc(sizeof(json_object<Ch>))) json_object<Ch>(type, internal::emptystr<Ch>(), internal::emptystr<Ch>());
         }
 
-        // Internal function to allocate \c size bytes from the given memory_pool (T_POOL).
+        // Internal function to allocate \c size bytes from the given memory_pool (pool).
         // Invokes the error_handler if memory allocation fails.
         byte* alloc(std::size_t size)
         {
-            byte* p = T_POOL::alloc(size);
+            byte* p = pool::alloc(size);
             if (p == 0)
             {
                 FASTJSON_PARSE_ERROR_THIS("Memory allocation failed", 0);
@@ -1672,41 +1682,41 @@ namespace fastjson
             StopPred<ChIn> pred;
             while ((data < end) && (pred(internal::read<Flags>(*data))))
             {
-				++data;
+                ++data;
             }
         }
 
-		// Internal parser based on character type
-		template<int Flags, class ChIn> void parse_internal(ChIn* data, const ChIn* end)
-		{
-			skip<internal::whitespace_pred, Flags>(data, end);
+        // Internal parser based on character type
+        template<int Flags, class ChIn> void parse_internal(ChIn* data, const ChIn* end)
+        {
+            skip<internal::whitespace_pred, Flags>(data, end);
 
-			if (data == end)
-			{
-				FASTJSON_PARSE_ERROR_THIS("Expected '{' or '['", data);
-			}
+            if (data == end)
+            {
+                FASTJSON_PARSE_ERROR_THIS("Expected '{' or '['", data);
+            }
 
-			// Must encounter an object or an array
-			if (internal::read<Flags>(*data) == ChIn('{'))
-			{
-				root_ = parse_object<Flags>(allocate_object(), ++data, end);
-			}
-			else if (internal::read<Flags>(*data) == ChIn('['))
-			{
-				root_ = parse_array<Flags>(allocate_object(), ++data, end);
-			}
-			else
-			{
-				FASTJSON_PARSE_ERROR_THIS("Expected '{' or '['", data);
-			}
+            // Must encounter an object or an array
+            if (internal::read<Flags>(*data) == ChIn('{'))
+            {
+                root_ = parse_object<Flags>(allocate_object(), ++data, end);
+            }
+            else if (internal::read<Flags>(*data) == ChIn('['))
+            {
+                root_ = parse_array<Flags>(allocate_object(), ++data, end);
+            }
+            else
+            {
+                FASTJSON_PARSE_ERROR_THIS("Expected '{' or '['", data);
+            }
 
-			skip<internal::whitespace_pred, Flags>(data, end);
+            skip<internal::whitespace_pred, Flags>(data, end);
 
-			if (data != end && internal::read<Flags>(*data) != ChIn(0))
-			{
-				FASTJSON_PARSE_ERROR_THIS("Expected end of document", data);
-			}
-		}
+            if (data != end && internal::read<Flags>(*data) != ChIn(0))
+            {
+                FASTJSON_PARSE_ERROR_THIS("Expected end of document", data);
+            }
+        }
 
 
         // Internal helper function for parsing a json object. Advances \c text past the object.
@@ -1738,9 +1748,9 @@ namespace fastjson
 
                 // ws : ws (name separator)
                 skip<internal::whitespace_pred, Flags>(data, end);
-				if (data == end || internal::read<Flags>(*data) != ChIn(':')) { FASTJSON_PARSE_ERROR_THIS("Expected name separator (:)", data); }
-				++data;
-				skip<internal::whitespace_pred, Flags>(data, end);
+                if (data == end || internal::read<Flags>(*data) != ChIn(':')) { FASTJSON_PARSE_ERROR_THIS("Expected name separator (:)", data); }
+                ++data;
+                skip<internal::whitespace_pred, Flags>(data, end);
 
                 json_value<Ch>* child = parse_value<Flags>(data, end);
                 child->name_ = namebegin;
@@ -1759,10 +1769,10 @@ namespace fastjson
                     skip<internal::whitespace_pred, Flags>(data, end);
 
                     // Close off the last value
-					if ((Flags & (parse_no_string_terminators|parse_force_string_terminators)) == 0 && *lastchild->valueend_ != Ch('\0'))
-					{
-						*lastchild->valueend_ = Ch('\0');
-					}
+                    if ((Flags & (parse_no_string_terminators|parse_force_string_terminators)) == 0 && *lastchild->valueend_ != Ch('\0'))
+                    {
+                        *lastchild->valueend_ = Ch('\0');
+                    }
                 }
                 else if (data != end && internal::read<Flags>(*data) == ChIn('}'))
                 {
@@ -1770,10 +1780,10 @@ namespace fastjson
                     ++data;
 
                     // Close off the last value
-					if ((Flags & (parse_no_string_terminators|parse_force_string_terminators)) == 0 && *lastchild->valueend_ != Ch('\0'))
-					{
-						*lastchild->valueend_ = Ch('\0');
-					}
+                    if ((Flags & (parse_no_string_terminators|parse_force_string_terminators)) == 0 && *lastchild->valueend_ != Ch('\0'))
+                    {
+                        *lastchild->valueend_ = Ch('\0');
+                    }
                     break;
                 }
                 else
@@ -1816,10 +1826,10 @@ namespace fastjson
                     skip<internal::whitespace_pred, Flags>(data, end);
 
                     // Close off the last value
-					if ((Flags & (parse_no_string_terminators|parse_force_string_terminators)) == 0 && *lastchild->valueend_ != Ch('\0'))
-					{
-						*lastchild->valueend_ = Ch('\0');
-					}
+                    if ((Flags & (parse_no_string_terminators|parse_force_string_terminators)) == 0 && *lastchild->valueend_ != Ch('\0'))
+                    {
+                        *lastchild->valueend_ = Ch('\0');
+                    }
                 }
                 else if (data != end && internal::read<Flags>(*data) == ChIn(']'))
                 {
@@ -1827,10 +1837,10 @@ namespace fastjson
                     ++data;
 
                     // Close off the last value
-					if ((Flags & (parse_no_string_terminators|parse_force_string_terminators)) == 0 && *lastchild->valueend_ != Ch('\0'))
-					{
-						*lastchild->valueend_ = Ch('\0');
-					}
+                    if ((Flags & (parse_no_string_terminators|parse_force_string_terminators)) == 0 && *lastchild->valueend_ != Ch('\0'))
+                    {
+                        *lastchild->valueend_ = Ch('\0');
+                    }
                     break;
                 }
                 else
@@ -1841,265 +1851,265 @@ namespace fastjson
             return val;
         }
 
-		// Internal helper function for measuring a string. This must be done if copy-and-translate
-		// parse flags are used. Can trigger errors if a parse error occurs.
-		// \param data In: The start of the string; Out: will be at the end of the string.
-		// \param end The end of valid input data
-		// \param outlen Receives the required string length (not including NUL) for the translated string
-		// \return \c true if translation is required; false otherwise
-		template<int Flags, class ChIn> bool measure_string(ChIn*& data, const ChIn* end, std::size_t& outlen)
-		{
-			bool translate_required = !!(Flags & internal::parse_do_swap) || (sizeof(Ch) != sizeof(ChIn)); // Always require translate if we're doing swapping or the output character size differs
-			outlen = 0;
-			while (data < end)
-			{
-				const ChIn c = internal::read<Flags>(*data);
-				switch (c)
-				{
-				default:
-					outlen += internal::measure<Flags, Ch>(data, end, static_cast<error_handler&>(*this));
-					break;
-
-				case ChIn('\"'): // End of string
-					return translate_required;
-
-				case ChIn('\\'): // Escaped character
-					translate_required = true;
-					if ((data + 1) >= end)
-					{
-						FASTJSON_PARSE_ERROR_THIS("Invalid escaped character", data + 1);
-					}
-
-					switch (internal::read<Flags>(*++data))
-					{
-					default:
-						FASTJSON_PARSE_ERROR_THIS("Invalid escaped character", data);
-						break;
-
-					case ChIn('"'):
-					case ChIn('\\'):
-					case ChIn('/'):
-					case ChIn('b'): // Backspace
-					case ChIn('f'): // Form feed
-					case ChIn('n'): // Line feed
-					case ChIn('r'): // Carriage return
-					case ChIn('t'): // Tab
-						++data;
-						++outlen;
-						break;
-
-					case ChIn('u'): // UTF-16 character
-						--data; // Rewind to the backslash
-						if ((end - data) < 6)
-						{
-							FASTJSON_PARSE_ERROR_THIS("Invalid \\u escape sequence", data);
-						}
-
-						{
-							utf16_char c[2];
-							c[0] = internal::read_utf16<Flags>(data, static_cast<error_handler&>(*this));
-							if (c[0] >= 0xd800 && c[0] <= 0xdfff)
-							{
-								if ((end - data) < 6)
-								{
-									FASTJSON_PARSE_ERROR_THIS("Expected UTF-16 surrogate pair", data);
-								}
-								// UTF-16 surrogate pair; read the next required character
-								c[1] = internal::read_utf16<Flags>(data, static_cast<error_handler&>(*this));
-								if (c[1] < 0xdc00 || c[1] > 0xdfff)
-								{
-									FASTJSON_PARSE_ERROR_THIS("Expected UTF-16 surrogate pair", data - 6);
-								}
-							}
-							// We're converting to whatever Ch is, so actually do the conversion into a dummy buffer that we can measure.
-							utf16_char* p = c;
-							outlen += internal::measure<0, Ch>(p, p + 2, static_cast<error_handler&>(*this));
-						}
-						break;
-					}
-					break;
-
-				case ChIn('\0'):
-					// Encountered a NUL character
-					FASTJSON_PARSE_ERROR_THIS("Expected end-of-string '\"'", data);
-					break;
-				}
-			}
-			// Ran out of characters
-			FASTJSON_PARSE_ERROR_THIS("Expected end-of-string '\"'", data);
-		}
-
-		template<int Flags, class ChIn> std::size_t measure_number(ChIn*& data, const ChIn* end)
-		{
-			const ChIn* start = data;
-
-			// A minus is allowed as the first character
-			if (data < end && internal::read<Flags>(*data) == ChIn('-'))
-			{
-				++data;
-			}
-
-			// A single zero or a series of digits
-			if (data < end && internal::read<Flags>(*data) == ChIn('0'))
-			{
-				++data;
-			}
-			else
-			{
-				ChIn* skipstart = data;
-				skip<internal::digit_pred,Flags>(data, end);
-				if (data == skipstart) { FASTJSON_PARSE_ERROR_THIS("Expected digit", data); }
-			}
-
-			// Optional decimal point
-			if (data < end && internal::read<Flags>(*data) == ChIn('.'))
-			{
-				++data;
-				ChIn* skipstart = data;
-				skip<internal::digit_pred,Flags>(data, end);
-				if (data == skipstart) { FASTJSON_PARSE_ERROR_THIS("Expected fractional digits", data); }
-			}
-
-			// Optional exponent
-			if (data < end)
-			{
-				ChIn c = internal::read<Flags>(*data);
-				if (c == ChIn('e') || c == ChIn('E'))
-				{
-					++data;
-
-					// Optional +/-
-					if (data < end)
-					{
-						c = internal::read<Flags>(*data);
-						if (c == ChIn('+') || c == ChIn('-'))
-						{
-							++data;
-						}
-					}
-
-					// Digits
-					ChIn* skipstart = data;
-					skip<internal::digit_pred,Flags>(data, end);
-					if (data == skipstart) { FASTJSON_PARSE_ERROR_THIS("Expected exponent digits", data); }
-				}
-			}
-
-			return (data - start);
-		}
-
-        // Internal helper function for parsing a json string. Advances \c text past the string.
-        // \c begin and \c end receive the string pointers.
-		// Translation is required if internal::parse_do_swap is set, Ch differs in size to ChIn or if the measure determines that characters must be translated
-		// The following table indicates how allocation/copying will take place:
-		//   sizeof(Ch) > sizeof(ChIn) - always requires allocation, translate
-		//   parse_force_string_terminators - always requires allocation, translate
-		//   parse_no_string_terminators - will destructively translate (if translate required) unless combined with parse_no_inline_translation, otherwise just point to inline data
-		//   parse_no_inline_translation - alloc/copy if translate required. Destructive NUL termination happens if parse_no_string_terminators is not present.
-        template<int Flags, class ChIn> void parse_string(ChIn*& data, const ChIn* end, Ch*& strbegin, Ch*& strend)
+        // Internal helper function for measuring a string. This must be done if copy-and-translate
+        // parse flags are used. Can trigger errors if a parse error occurs.
+        // \param data In: The start of the string; Out: will be at the end of the string.
+        // \param end The end of valid input data
+        // \param outlen Receives the required string length (not including NUL) for the translated string
+        // \return \c true if translation is required; false otherwise
+        template<int Flags, class ChIn> bool measure_string(ChIn*& data, const ChIn* end, std::size_t& outlen)
         {
-			// How strings are parsed depends heavily on flags.
-			bool require_alloc = (sizeof(Ch) > sizeof(ChIn)) || (Flags & parse_force_string_terminators);
-			bool translate_required = true;
-			ChIn* str_end = data;
-			Ch* out = (Ch*)data;
-			Ch* out_end = (Ch*)end;
-			std::size_t outlen = std::size_t(-1);
-			if (require_alloc || (Flags & (parse_force_string_terminators | parse_no_string_terminators | parse_no_inline_translation | internal::parse_do_swap)) != 0)
-			{
-				// Measure the string first
-				translate_required = measure_string<Flags>(str_end, end, outlen);
-			}
-
-			if (((Flags & parse_no_string_terminators) != 0) && !translate_required)
-			{
-				// String doesn't need translation and we don't need string terminators. This is the fastest case.
-				// We can early out.
-				assert(sizeof(ChIn) == sizeof(Ch));
-				assert((Flags & internal::parse_do_swap) == 0);
-				strbegin = (Ch*)data;
-				strend = (Ch*)str_end;
-				data = (str_end + 1); // Skip the closing "
-				return;
-			}
-
-			if ((Flags & (parse_no_inline_translation)) != 0)
-			{
-				require_alloc = true;
-			}
-
-			if (require_alloc)
-			{
-				// Must copy
-				assert(outlen != std::size_t(-1));
-				out = (Ch*)alloc(sizeof(Ch) * (outlen + 1));
-				out_end = out + outlen + 1;
-			}
-
-			strbegin = out;
-
-			while (data < end)
+            bool translate_required = !!(Flags & internal::parse_do_swap) || (sizeof(Ch) != sizeof(ChIn)); // Always require translate if we're doing swapping or the output character size differs
+            outlen = 0;
+            while (data < end)
             {
-                switch (internal::read<Flags>(*data))
+                const ChIn c = internal::read<Flags>(*data);
+                switch (c)
                 {
                 default:
-					internal::convert<Flags>(data, end, out, out_end, static_cast<error_handler&>(*this));
+                    outlen += internal::measure<Flags, Ch>(data, end, static_cast<error_handler&>(*this));
                     break;
 
-                case ChIn('\"'):  // End of string
-					// Even if parse_no_string_terminators is specified, this should be an allocated copy
-                    *(strend = out) = Ch('\0');
-					++data;
-                    return;
+                case ChIn('\"'): // End of string
+                    return translate_required;
 
-				case ChIn('\\'):  // Escaped character
+                case ChIn('\\'): // Escaped character
+                    translate_required = true;
+                    if ((data + 1) >= end)
+                    {
+                        FASTJSON_PARSE_ERROR_THIS("Invalid escaped character", data + 1);
+                    }
+
                     switch (internal::read<Flags>(*++data))
                     {
                     default:
                         FASTJSON_PARSE_ERROR_THIS("Invalid escaped character", data);
                         break;
 
-					case ChIn('"'):
-					case ChIn('\\'):
-					case ChIn('/'):
-						internal::convert<Flags>(data, end, out, out_end, static_cast<error_handler&>(*this));
+                    case ChIn('"'):
+                    case ChIn('\\'):
+                    case ChIn('/'):
+                    case ChIn('b'): // Backspace
+                    case ChIn('f'): // Form feed
+                    case ChIn('n'): // Line feed
+                    case ChIn('r'): // Carriage return
+                    case ChIn('t'): // Tab
+                        ++data;
+                        ++outlen;
                         break;
 
-					case ChIn('b'): // Backspace
-						*out++ = Ch('\x08'); ++data;
+                    case ChIn('u'): // UTF-16 character
+                        --data; // Rewind to the backslash
+                        if ((end - data) < 6)
+                        {
+                            FASTJSON_PARSE_ERROR_THIS("Invalid \\u escape sequence", data);
+                        }
+
+                        {
+                            utf16_char cu[2];
+                            cu[0] = internal::read_utf16<Flags>(data, static_cast<error_handler&>(*this));
+                            if (cu[0] >= 0xd800 && cu[0] <= 0xdfff)
+                            {
+                                if ((end - data) < 6)
+                                {
+                                    FASTJSON_PARSE_ERROR_THIS("Expected UTF-16 surrogate pair", data);
+                                }
+                                // UTF-16 surrogate pair; read the next required character
+                                cu[1] = internal::read_utf16<Flags>(data, static_cast<error_handler&>(*this));
+                                if (cu[1] < 0xdc00 || cu[1] > 0xdfff)
+                                {
+                                    FASTJSON_PARSE_ERROR_THIS("Expected UTF-16 surrogate pair", data - 6);
+                                }
+                            }
+                            // We're converting to whatever Ch is, so actually do the conversion into a dummy buffer that we can measure.
+                            utf16_char* p = cu;
+                            outlen += internal::measure<0, Ch>(p, p + 2, static_cast<error_handler&>(*this));
+                        }
+                        break;
+                    }
+                    break;
+
+                case ChIn('\0'):
+                    // Encountered a NUL character
+                    FASTJSON_PARSE_ERROR_THIS("Expected end-of-string '\"'", data);
+                    break;
+                }
+            }
+            // Ran out of characters
+            FASTJSON_PARSE_ERROR_THIS("Expected end-of-string '\"'", data);
+        }
+
+        template<int Flags, class ChIn> std::size_t measure_number(ChIn*& data, const ChIn* end)
+        {
+            const ChIn* start = data;
+
+            // A minus is allowed as the first character
+            if (data < end && internal::read<Flags>(*data) == ChIn('-'))
+            {
+                ++data;
+            }
+
+            // A single zero or a series of digits
+            if (data < end && internal::read<Flags>(*data) == ChIn('0'))
+            {
+                ++data;
+            }
+            else
+            {
+                ChIn* skipstart = data;
+                skip<internal::digit_pred,Flags>(data, end);
+                if (data == skipstart) { FASTJSON_PARSE_ERROR_THIS("Expected digit", data); }
+            }
+
+            // Optional decimal point
+            if (data < end && internal::read<Flags>(*data) == ChIn('.'))
+            {
+                ++data;
+                ChIn* skipstart = data;
+                skip<internal::digit_pred,Flags>(data, end);
+                if (data == skipstart) { FASTJSON_PARSE_ERROR_THIS("Expected fractional digits", data); }
+            }
+
+            // Optional exponent
+            if (data < end)
+            {
+                ChIn c = internal::read<Flags>(*data);
+                if (c == ChIn('e') || c == ChIn('E'))
+                {
+                    ++data;
+
+                    // Optional +/-
+                    if (data < end)
+                    {
+                        c = internal::read<Flags>(*data);
+                        if (c == ChIn('+') || c == ChIn('-'))
+                        {
+                            ++data;
+                        }
+                    }
+
+                    // Digits
+                    ChIn* skipstart = data;
+                    skip<internal::digit_pred,Flags>(data, end);
+                    if (data == skipstart) { FASTJSON_PARSE_ERROR_THIS("Expected exponent digits", data); }
+                }
+            }
+
+            return (data - start);
+        }
+
+        // Internal helper function for parsing a json string. Advances \c text past the string.
+        // \c begin and \c end receive the string pointers.
+        // Translation is required if internal::parse_do_swap is set, Ch differs in size to ChIn or if the measure determines that characters must be translated
+        // The following table indicates how allocation/copying will take place:
+        //   sizeof(Ch) > sizeof(ChIn) - always requires allocation, translate
+        //   parse_force_string_terminators - always requires allocation, translate
+        //   parse_no_string_terminators - will destructively translate (if translate required) unless combined with parse_no_inline_translation, otherwise just point to inline data
+        //   parse_no_inline_translation - alloc/copy if translate required. Destructive NUL termination happens if parse_no_string_terminators is not present.
+        template<int Flags, class ChIn> void parse_string(ChIn*& data, const ChIn* end, Ch*& strbegin, Ch*& strend)
+        {
+            // How strings are parsed depends heavily on flags.
+            bool require_alloc = (sizeof(Ch) > sizeof(ChIn)) || (Flags & parse_force_string_terminators);
+            bool translate_required = true;
+            ChIn* str_end = data;
+            Ch* out = (Ch*)data;
+            Ch* out_end = (Ch*)end;
+            std::size_t outlen = std::size_t(-1);
+            if (require_alloc || (Flags & (parse_force_string_terminators | parse_no_string_terminators | parse_no_inline_translation | internal::parse_do_swap)) != 0)
+            {
+                // Measure the string first
+                translate_required = measure_string<Flags>(str_end, end, outlen);
+            }
+
+            if (((Flags & parse_no_string_terminators) != 0) && !translate_required)
+            {
+                // String doesn't need translation and we don't need string terminators. This is the fastest case.
+                // We can early out.
+                assert(sizeof(ChIn) == sizeof(Ch));
+                assert((Flags & internal::parse_do_swap) == 0);
+                strbegin = (Ch*)data;
+                strend = (Ch*)str_end;
+                data = (str_end + 1); // Skip the closing "
+                return;
+            }
+
+            if ((Flags & (parse_no_inline_translation)) != 0)
+            {
+                require_alloc = true;
+            }
+
+            if (require_alloc)
+            {
+                // Must copy
+                assert(outlen != std::size_t(-1));
+                out = (Ch*)alloc(sizeof(Ch) * (outlen + 1));
+                out_end = out + outlen + 1;
+            }
+
+            strbegin = out;
+
+            while (data < end)
+            {
+                switch (internal::read<Flags>(*data))
+                {
+                default:
+                    internal::convert<Flags>(data, end, out, out_end, static_cast<error_handler&>(*this));
+                    break;
+
+                case ChIn('\"'):  // End of string
+                    // Even if parse_no_string_terminators is specified, this should be an allocated copy
+                    *(strend = out) = Ch('\0');
+                    ++data;
+                    return;
+
+                case ChIn('\\'):  // Escaped character
+                    switch (internal::read<Flags>(*++data))
+                    {
+                    default:
+                        FASTJSON_PARSE_ERROR_THIS("Invalid escaped character", data);
                         break;
 
-					case ChIn('f'): // Form feed
-						*out++ = Ch('\x0c'); ++data;
+                    case ChIn('"'):
+                    case ChIn('\\'):
+                    case ChIn('/'):
+                        internal::convert<Flags>(data, end, out, out_end, static_cast<error_handler&>(*this));
                         break;
 
-					case ChIn('n'): // Line feed
-						*out++ = Ch('\x0a'); ++data;
+                    case ChIn('b'): // Backspace
+                        *out++ = Ch('\x08'); ++data;
                         break;
 
-					case ChIn('r'): // carriage return
-						*out++ = Ch('\x0d'); ++data;
+                    case ChIn('f'): // Form feed
+                        *out++ = Ch('\x0c'); ++data;
                         break;
 
-					case ChIn('t'): // tab
-						*out++ = Ch('\x09'); ++data;
+                    case ChIn('n'): // Line feed
+                        *out++ = Ch('\x0a'); ++data;
                         break;
 
-					case ChIn('u'): // UTF-16 character
+                    case ChIn('r'): // carriage return
+                        *out++ = Ch('\x0d'); ++data;
+                        break;
+
+                    case ChIn('t'): // tab
+                        *out++ = Ch('\x09'); ++data;
+                        break;
+
+                    case ChIn('u'): // UTF-16 character
                         --data; // Rewind to the backslash
                         {
                             utf16_char c[2];
-							if ((end - data) < 6)
-							{
-								FASTJSON_PARSE_ERROR_THIS("Invalid \\u escape sequence", data);
-							}
+                            if ((end - data) < 6)
+                            {
+                                FASTJSON_PARSE_ERROR_THIS("Invalid \\u escape sequence", data);
+                            }
                             c[0] = internal::read_utf16<Flags>(data, static_cast<error_handler&>(*this));
                             if (c[0] >= 0xd800 && c[0] <= 0xdfff)
                             {
-								if ((end - data) < 6)
-								{
-									FASTJSON_PARSE_ERROR_THIS("Expected UTF-16 surrogate pair", data);
-								}
+                                if ((end - data) < 6)
+                                {
+                                    FASTJSON_PARSE_ERROR_THIS("Expected UTF-16 surrogate pair", data);
+                                }
                                 // UTF-16 surrogate pair; read the next required character
                                 c[1] = internal::read_utf16<Flags>(data, static_cast<error_handler&>(*this));
                                 if (c[1] < 0xdc00 || c[1] > 0xdfff)
@@ -2107,8 +2117,8 @@ namespace fastjson
                                     FASTJSON_PARSE_ERROR_THIS("Invalid UTF-16 surrogate pair", data - 6);
                                 }
                             }
-							utf16_char* p = c;
-							internal::convert<0>(p, p + 2, out, out_end, static_cast<error_handler&>(*this));
+                            utf16_char* p = c;
+                            internal::convert<0>(p, p + 2, out, out_end, static_cast<error_handler&>(*this));
                         }
                         break;
                     }
@@ -2120,7 +2130,7 @@ namespace fastjson
                 }
             }
 
-			FASTJSON_PARSE_ERROR_THIS("Expected end-of-string '\"'", data);
+            FASTJSON_PARSE_ERROR_THIS("Expected end-of-string '\"'", data);
         }
 
         // Internal helper function for parsing a json number. Advances \c text past the number.
@@ -2128,59 +2138,59 @@ namespace fastjson
         {
             val->type_ = value_number;
 
-			// Easiest case: if Ch and ChIn are the same size and no swap is required,
-			// we can just point to the number in the data and move on.
-			if (sizeof(Ch) == sizeof(ChIn) && (Flags & (parse_force_string_terminators|parse_no_string_terminators|internal::parse_do_swap)) == parse_no_string_terminators)
-			{
-				val->value_ = (Ch*)data;
-				measure_number<Flags>(data, end);
-				val->valueend_ = (Ch*)data;
-				return;
-			}
+            // Easiest case: if Ch and ChIn are the same size and no swap is required,
+            // we can just point to the number in the data and move on.
+            if (sizeof(Ch) == sizeof(ChIn) && (Flags & (parse_force_string_terminators|parse_no_string_terminators|internal::parse_do_swap)) == parse_no_string_terminators)
+            {
+                val->value_ = (Ch*)data;
+                measure_number<Flags>(data, end);
+                val->valueend_ = (Ch*)data;
+                return;
+            }
 
-			// We need to copy the string in some cases
-			bool require_alloc = false;
-			if (sizeof(Ch) > sizeof(ChIn) || (Flags & (parse_force_string_terminators)) != 0)
-			{
-				require_alloc = true;
-			}
+            // We need to copy the string in some cases
+            bool require_alloc = false;
+            if (sizeof(Ch) > sizeof(ChIn) || (Flags & (parse_force_string_terminators)) != 0)
+            {
+                require_alloc = true;
+            }
 
-			// Measure the string and copy
-			ChIn* num_end = data;
-			const std::size_t chars = measure_number<Flags>(num_end, end);
-			Ch* out = (Ch*)data;
-			if (require_alloc)
-			{
-				out = (Ch*)alloc(sizeof(Ch) * (chars + 1));
-				*(out + chars) = Ch('\0');
-			}
+            // Measure the string and copy
+            ChIn* num_end = data;
+            const std::size_t chars = measure_number<Flags>(num_end, end);
+            Ch* out = (Ch*)data;
+            if (require_alloc)
+            {
+                out = (Ch*)alloc(sizeof(Ch) * (chars + 1));
+                *(out + chars) = Ch('\0');
+            }
 
-			val->value_ = out;
+            val->value_ = out;
 
-			const Ch* out_end = out + chars;
-			while (data < num_end)
-			{
-				internal::convert<Flags>(data, num_end, out, out_end, static_cast<error_handler&>(*this));
-			}
+            const Ch* out_end = out + chars;
+            while (data < num_end)
+            {
+                internal::convert<Flags>(data, num_end, out, out_end, static_cast<error_handler&>(*this));
+            }
 
-			val->valueend_ = (Ch*)out_end;
+            val->valueend_ = (Ch*)out_end;
         }
 
         // Internal helper function for parsing a json_value.
         template<int Flags, class ChIn> json_value<Ch>* parse_value(ChIn*& data, const ChIn* end)
         {
-			if (data == end)
-			{
-				FASTJSON_PARSE_ERROR_THIS("Expected value", data);
-			}
+            if (data == end)
+            {
+                FASTJSON_PARSE_ERROR_THIS("Expected value", data);
+            }
 
             json_value<Ch>* val = 0;
             switch (internal::read<Flags>(*data))
             {
-			case ChIn('-'):
-			case ChIn('.'): // Not necessary, but will provide a better 'Expected digit' parse error rather than 'Expected value'
-			case ChIn('0'): case ChIn('1'): case ChIn('2'): case ChIn('3'): case ChIn('4'):
-			case ChIn('5'): case ChIn('6'): case ChIn('7'): case ChIn('8'): case ChIn('9'):
+            case ChIn('-'):
+            case ChIn('.'): // Not necessary, but will provide a better 'Expected digit' parse error rather than 'Expected value'
+            case ChIn('0'): case ChIn('1'): case ChIn('2'): case ChIn('3'): case ChIn('4'):
+            case ChIn('5'): case ChIn('6'): case ChIn('7'): case ChIn('8'): case ChIn('9'):
                 parse_number<Flags>(data, end, val = allocate_value());
                 return val;
 
@@ -2317,20 +2327,20 @@ namespace fastjson
             Ch('f'), Ch('a'), Ch('l'), Ch('s'), Ch('e'), Ch('\0')
         };
 
-		template<int Dummy>
-		const std::size_t lookup_tables<Dummy>::utf8_lengths[64] =
-		{
-			1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-			1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-			0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // invalid
-			2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 0, 0
-		};
+        template<int Dummy>
+        const std::size_t lookup_tables<Dummy>::utf8_lengths[64] =
+        {
+            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // invalid
+            2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 0, 0
+        };
 
-		template<int Dummy>
-		const std::size_t lookup_tables<Dummy>::encoding_sizes[5] =
-		{
-			1, 2, 2, 4, 4
-		};
+        template<int Dummy>
+        const std::size_t lookup_tables<Dummy>::encoding_sizes[5] =
+        {
+            1, 2, 2, 4, 4
+        };
     }
 }
 
