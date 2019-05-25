@@ -1,9 +1,7 @@
 #include "gtest/gtest.h"
 #include "../fastjson.hpp"
 
-#ifdef _MSC_VER
 #pragma warning (disable : 4127) // Conditional expression is constant
-#endif
 
 using namespace fastjson;
 
@@ -47,7 +45,7 @@ template<class ChIn, class ChOut, bool Swap> void do_test()
 	json_document<ChOut> doc;
 	try
 	{
-		doc.template parse<0>(copy, (out-copy)*sizeof(ChIn));
+		doc.parse<0>(copy, (out-copy)*sizeof(ChIn));
 	}
 	catch (parse_error e)
 	{

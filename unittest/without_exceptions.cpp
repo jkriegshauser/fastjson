@@ -1,8 +1,6 @@
 #include "gtest/gtest.h"
 
-#include "../fastjson.hpp"
-
-#include <setjmp.h>
+#include "fastjson.hpp"
 
 #if _MSC_VER
 #pragma warning (disable : 4611) // interation between '_setjmp' and C++ object destruction is non-portable
@@ -10,19 +8,23 @@
 
 using namespace fastjson;
 
+static jmp_buf env;
+
 template<class Ch = char> class test_parse_failure
 {
+    const char* what;
+    void* where;
+
     struct error_handler
     {
-        jmp_buf buf;
-        const char* what;
-        void* where;
-        error_handler() {}
+        test_parse_failure<Ch>* owner;
+        error_handler(test_parse_failure<Ch>* owner_ = 0) : owner(owner_) {}
 
         void operator () (const char* what_, void* where_)
         {
-            what = what_, where = where_;
-            longjmp(buf, 1);
+            owner->what = what_;
+            owner->where = where_;
+            longjmp(env, 1);
         }
     };
 
@@ -38,15 +40,14 @@ public:
         while (*inp) *outp++ = *inp++;
         *outp = Ch(0);
 
-        /*try*/ if (::setjmp(doc.get_error_handler().buf) == 0)
+        error_handler handler(this);
+        if (::setjmp(env) == 0) // "try"
         {
-            doc.template parse<Flags>(buffer, sizeof(Ch)*(outp - buffer), json_document<Ch, error_handler>::unknown);
+            doc.parse<Flags>(buffer, sizeof(Ch)*(outp - buffer), json_document<Ch, error_handler>::unknown, handler);
             EXPECT_TRUE(expectSuccess) << "Parse succeeded unexpectedly for text: " << data;
         }
-        /*catch*/ else
+        else // "catch"
         {
-            const Ch* what = doc.get_error_handler().what;
-            Ch* where = (Ch*)doc.get_error_handler().where;
             EXPECT_FALSE(expectSuccess) << "Parse failed unexpectedly for text: " << data;
             EXPECT_EQ(offset, (Ch*)where - buffer) << "For error (" << errorString << ") and text: " << data;
             EXPECT_STREQ(errorString, what);

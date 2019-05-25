@@ -1323,8 +1323,8 @@ namespace fastjson
             if (!this->is_object()) return false;
             if (name == 0 || *name == Ch('\0')) return false;
             if (val == 0 || val->owner_ != 0) return false;
-            val->name_ = name;
-            val->nameend_ = name + internal::length(name);
+            val->name_ = const_cast<Ch*>(name);
+            val->nameend_ = val->name_ + internal::length(name);
             // If there's an existing value by this name, then replace it.
             json_value<Ch>** pp = &child_;
             while (*pp)
@@ -1568,8 +1568,8 @@ namespace fastjson
         json_value<Ch>* allocate_string_value(const Ch* value)
         {
             json_value<Ch>* pval = allocate_value(value_string);
-            pval->value_ = value;
-            pval->valueend_ = value + internal::length(value);
+            pval->value_ = const_cast<Ch*>(value);
+            pval->valueend_ = pval->value_ + internal::length(value);
             return pval;
         }
 
@@ -1585,15 +1585,16 @@ namespace fastjson
             json_value<Ch>* pval = allocate_value(value_number);
 
             Ch buffer[128];
-            if (!internal::number_to_string(val, buffer, buffer + 128))
+            Ch* bufend = buffer + 128;
+            if (!internal::number_to_string(val, buffer, bufend))
             {
                 // Actually a string due to infinite or NaN
                 pval->type_ = value_string;
             }
 
-            Ch* sval = allocate_string(buffer);
+            Ch* sval = allocate_string(buffer, bufend - buffer);
             pval->value_ = sval;
-            pval->valueend_ = sval + internal::length(sval);
+            pval->valueend_ = sval + (bufend - buffer);
             return pval;
         }
 

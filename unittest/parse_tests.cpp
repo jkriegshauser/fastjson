@@ -1,6 +1,6 @@
 #include "gtest/gtest.h"
 
-#include "../fastjson.hpp"
+#include "fastjson.hpp"
 
 #ifdef _MSC_VER
 #pragma warning (disable : 4127) // Conditional expression is constant
@@ -28,7 +28,7 @@ template<class Ch, int Flags, bool destructive> void test()
 	}
 
 	json_document<Ch> doc;
-	doc.template parse<Flags>(buffer, sizeof(buffer));
+	doc.parse<Flags>(buffer, sizeof(buffer));
 
 	if (!destructive)
 	{
