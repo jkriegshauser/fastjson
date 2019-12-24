@@ -28,7 +28,7 @@ template<class Ch, int Flags, bool destructive> void test()
 	}
 
 	json_document<Ch> doc;
-	doc.parse<Flags>(buffer, sizeof(buffer));
+	doc.template parse<Flags>(buffer, sizeof(buffer));
 
 	if (!destructive)
 	{

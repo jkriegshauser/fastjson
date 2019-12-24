@@ -1,6 +1,7 @@
 #include "gtest/gtest.h"
 
 #include "fastjson.hpp"
+#include <setjmp.h>
 
 #if _MSC_VER
 #pragma warning (disable : 4611) // interation between '_setjmp' and C++ object destruction is non-portable
@@ -40,10 +41,10 @@ public:
         while (*inp) *outp++ = *inp++;
         *outp = Ch(0);
 
-        error_handler handler(this);
+        doc.get_error_handler().owner = this; 
         if (::setjmp(env) == 0) // "try"
         {
-            doc.parse<Flags>(buffer, sizeof(Ch)*(outp - buffer), json_document<Ch, error_handler>::unknown, handler);
+            doc.template parse<Flags>(buffer, sizeof(Ch)*(outp - buffer), json_document<Ch, error_handler>::unknown);
             EXPECT_TRUE(expectSuccess) << "Parse succeeded unexpectedly for text: " << data;
         }
         else // "catch"

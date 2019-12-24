@@ -898,6 +898,10 @@ namespace fastjson
     const int parse_non_destructive = (parse_no_string_terminators|parse_no_inline_translation); //!< Ensures that the buffer passed to json_document::parse is not modified. Does not always terminate strings; use json_value::nameend() to get the end of the string.
     const int parse_non_destructive_nul = (parse_force_string_terminators); //!< Ensures that the buffer passed to json_document::parse is not modified. Strings are copied and NUL-terminated. Slightly less efficient than parse_non_destructive.
 
+    // These flags are non-RFC-7159 compliant, but helpful
+    const int parse_trailing_commas = 1 << 3; //<! Allows commas to exist at the end of objects and arrays
+    const int parse_comments = 1 << 4; //<! Allows comments (//, /**/, #) to exist
+
     ///////////////////////////////////////////////////////////////////////////
     // Allocator interface
 
@@ -1690,7 +1694,7 @@ namespace fastjson
         // Internal parser based on character type
         template<int Flags, class ChIn> void parse_internal(ChIn* data, const ChIn* end)
         {
-            skip<internal::whitespace_pred, Flags>(data, end);
+            skip_whitespace_and_comments<Flags>(data, end);
 
             if (data == end)
             {
@@ -1711,11 +1715,70 @@ namespace fastjson
                 FASTJSON_PARSE_ERROR_THIS("Expected '{' or '['", data);
             }
 
-            skip<internal::whitespace_pred, Flags>(data, end);
+            skip_whitespace_and_comments<Flags>(data, end);
 
             if (data != end && internal::read<Flags>(*data) != ChIn(0))
             {
                 FASTJSON_PARSE_ERROR_THIS("Expected end of document", data);
+            }
+        }
+
+        template<int Flags, class ChIn> void skip_whitespace_and_comments(ChIn*& data, const ChIn* end)
+        {
+            if (!!(Flags & parse_comments) && data != end)
+            {
+                bool b;
+                do
+                {
+                    b = false;
+
+                    // Skip any whitespace
+                    skip<internal::whitespace_pred, Flags>(data, end);
+
+                    switch (internal::read<Flags>(*data))
+                    {
+                    case ChIn('#'):
+                        // Line comment. Read until newline
+                        ++data;
+                        while (data != end && internal::read<Flags>(*data) != ChIn('\n'))
+                            ++data;
+                        b = true;
+                        break;
+
+                    case ChIn('/'):
+                        // Line or multi-line comment
+                        if ((data + 1) != end)
+                        {
+                            if (internal::read<Flags>(*(data + 1)) == ChIn('/'))
+                            {
+                                data += 2;
+                                while (data != end && internal::read<Flags>(*data) != ChIn('\n'))
+                                    ++data;
+                                b = true;
+                            }
+                            else if (internal::read<Flags>(*(data + 1)) == ChIn('*'))
+                            {
+                                data += 2;
+                                while (data != end)
+                                {
+                                    if ((end - data) >= 2 && internal::read<Flags>(*data) == ChIn('*') && internal::read<Flags>(*(data + 1)) == ChIn('/'))
+                                    {
+                                        data += 2;
+                                        b = true;
+                                        break;
+                                    }
+                                    ++data;
+                                }
+                            }
+                        }
+                        break;
+                    }
+                } while (b);
+            }
+            else
+            {
+                // Just skip whitespace
+                skip<internal::whitespace_pred, Flags>(data, end);
             }
         }
 
@@ -1726,7 +1789,7 @@ namespace fastjson
             json_value<Ch>* lastchild = 0;
             val->type_ = value_object;
 
-            skip<internal::whitespace_pred, Flags>(data, end);
+            skip_whitespace_and_comments<Flags>(data, end);
 
             // Check for empty object
             if (data != end && internal::read<Flags>(*data) == ChIn('}'))
@@ -1748,10 +1811,10 @@ namespace fastjson
                 parse_string<Flags>(++data, end, namebegin, nameend);
 
                 // ws : ws (name separator)
-                skip<internal::whitespace_pred, Flags>(data, end);
+                skip_whitespace_and_comments<Flags>(data, end);
                 if (data == end || internal::read<Flags>(*data) != ChIn(':')) { FASTJSON_PARSE_ERROR_THIS("Expected name separator (:)", data); }
                 ++data;
-                skip<internal::whitespace_pred, Flags>(data, end);
+                skip_whitespace_and_comments<Flags>(data, end);
 
                 json_value<Ch>* child = parse_value<Flags>(data, end);
                 child->name_ = namebegin;
@@ -1762,17 +1825,28 @@ namespace fastjson
                 lastchild = child;
 
                 // Eat whitespace and an optional value-separator
-                skip<internal::whitespace_pred, Flags>(data, end);
+                skip_whitespace_and_comments<Flags>(data, end);
 
                 if (data != end && internal::read<Flags>(*data) == ChIn(','))
                 {
                     ++data;
-                    skip<internal::whitespace_pred, Flags>(data, end);
+                    skip_whitespace_and_comments<Flags>(data, end);
 
                     // Close off the last value
                     if ((Flags & (parse_no_string_terminators|parse_force_string_terminators)) == 0 && *lastchild->valueend_ != Ch('\0'))
                     {
                         *lastchild->valueend_ = Ch('\0');
+                    }
+
+                    if (!!(Flags & parse_trailing_commas))
+                    {
+                        // If trailing commas are allowed, see if this is the end of the object
+                        if (data != end && internal::read<Flags>(*data) == ChIn('}'))
+                        {
+                            // End of object
+                            ++data;
+                            break;
+                        }
                     }
                 }
                 else if (data != end && internal::read<Flags>(*data) == ChIn('}'))
@@ -1801,7 +1875,7 @@ namespace fastjson
             json_value<Ch>* lastchild = 0;
             val->type_ = value_array;
 
-            skip<internal::whitespace_pred, Flags>(data, end);
+            skip_whitespace_and_comments<Flags>(data, end);
 
             // Check for empty array
             if (data != end && internal::read<Flags>(*data) == ChIn(']'))
@@ -1819,17 +1893,28 @@ namespace fastjson
                 lastchild = child;
 
                 // Eat whitespace
-                skip<internal::whitespace_pred, Flags>(data, end);
+                skip_whitespace_and_comments<Flags>(data, end);
 
                 if (data != end && internal::read<Flags>(*data) == ChIn(','))
                 {
                     ++data;
-                    skip<internal::whitespace_pred, Flags>(data, end);
+                    skip_whitespace_and_comments<Flags>(data, end);
 
                     // Close off the last value
                     if ((Flags & (parse_no_string_terminators|parse_force_string_terminators)) == 0 && *lastchild->valueend_ != Ch('\0'))
                     {
                         *lastchild->valueend_ = Ch('\0');
+                    }
+
+                    if (!!(Flags & parse_trailing_commas))
+                    {
+                        // If trailing commas are allowed, see if this is the end of the array
+                        if (data != end && internal::read<Flags>(*data) == ChIn(']'))
+                        {
+                            // End of array
+                            ++data;
+                            break;
+                        }
                     }
                 }
                 else if (data != end && internal::read<Flags>(*data) == ChIn(']'))

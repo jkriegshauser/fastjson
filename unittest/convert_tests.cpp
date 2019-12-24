@@ -45,7 +45,7 @@ template<class ChIn, class ChOut, bool Swap> void do_test()
 	json_document<ChOut> doc;
 	try
 	{
-		doc.parse<0>(copy, (out-copy)*sizeof(ChIn));
+		doc.template parse<0>(copy, (out-copy)*sizeof(ChIn));
 	}
 	catch (parse_error e)
 	{
