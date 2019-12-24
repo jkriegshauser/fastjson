@@ -174,4 +174,17 @@ TEST(fastjson_no_except, parser)
     tester.test<0>(" { \"\" : {\t} ", "Expected value-separator ',' or end-of-object '}'", 12);
     tester.test<0>(" { } { } ", "Expected end of document", 5);
     tester.test<0>(" { } [ ] ", "Expected end of document", 5);
+
+    // Comments
+    tester.test<0/*no comments*/>(" // Comment\n { } ", "Expected '{' or '['", 1, false);
+    tester.test<fastjson::parse_comments>(" // This is a comment \n { } // and another\n // and another \n", "", 0, true);
+    tester.test<fastjson::parse_comments>(" # This is a comment \n { } # and another\n # and another \n", "", 0, true);
+    tester.test<fastjson::parse_comments>(" /*****This\n is \n a \nmulti-line\n comment {} \n*/ \n { /* and another\n } */ } /* and \n another */", "", 0, true);
+
+    // Trailing commas
+    tester.test<0/*no commas*/>(" { \"first\":\"first\", } ", "Expected name (string)", 20, false);
+    tester.test<fastjson::parse_trailing_commas>(" { \"first\": \"first\", } ", "", 0, true);
+    tester.test<fastjson::parse_trailing_commas>(" {,} ", "Expected end-of-object '}' or name (string)", 2, false);
+    tester.test<fastjson::parse_trailing_commas>(" [ \"first\", ] ", "", 0, true);
+    tester.test<fastjson::parse_trailing_commas>(" [,] ", "Expected value", 2, false);
 }
