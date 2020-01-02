@@ -374,10 +374,10 @@ namespace fastjson
     //! \param doc Document to be printed
     //! \param flags Flags controlling how json is printed
     //! \return Output stream.
-    template<class Ch, class T_POOL>
-    inline std::basic_ostream<Ch>& print(std::basic_ostream<Ch>& out, const json_document<Ch, T_POOL>& doc, int flags = 0)
+    template<class Ch, class Traits, class T_POOL>
+    inline std::basic_ostream<Ch, Traits>& print(std::basic_ostream<Ch, Traits>& out, const json_document<Ch, T_POOL>& doc, int flags = 0)
     {
-        std::ostream_iterator<Ch, Ch> iter(out);
+        std::ostream_iterator<Ch, Ch, Traits> iter(out);
         print(iter, doc, flags);
         return out;
     }
@@ -386,10 +386,10 @@ namespace fastjson
     //! \param out Output stream to print to.
     //! \param doc Document to be printed.
     //! \return Output stream.
-    template<class Ch, class T_POOL>
-    inline std::basic_ostream<Ch>& operator << (std::basic_ostream<Ch>& out, const json_document<Ch, T_POOL>& doc)
+    template<class Ch, class Traits, class T_POOL>
+    inline std::basic_ostream<Ch, Traits>& operator << (std::basic_ostream<Ch, Traits>& out, const json_document<Ch, T_POOL>& doc)
     {
-        return print(out, node);
+        return print(out, doc.root());
     }
 
     //! \brief Prints the json object or array to the given output stream.
@@ -397,10 +397,10 @@ namespace fastjson
     //! \param value The object or array to be printed.
     //! \param flags Flags controlling how json is printed.
     //! \return Output stream.
-    template<class Ch>
-    inline std::basic_ostream<Ch>& print(std::basic_ostream<Ch>& out, const json_object<Ch>& value, int flags = 0)
+    template<class Ch, class Traits>
+    inline std::basic_ostream<Ch, Traits>& print(std::basic_ostream<Ch, Traits>& out, const json_object<Ch>& value, int flags = 0)
     {
-        std::ostream_iterator<Ch, Ch> iter(out);
+        std::ostream_iterator<Ch, Ch, Traits> iter(out);
         print(iter, value, flags|skip_name);
         return out;
     }
@@ -409,8 +409,8 @@ namespace fastjson
     //! \param out Output stream to print to.
     //! \param value The object or array to be printed.
     //! \return Output stream.
-    template<class Ch>
-    inline std::basic_ostream<Ch>& operator << (std::basic_ostream<Ch>& out, const json_object<Ch>& value)
+    template<class Ch, class Traits>
+    inline std::basic_ostream<Ch, Traits>& operator << (std::basic_ostream<Ch, Traits>& out, const json_object<Ch>& value)
     {
         return print(out, value);
     }

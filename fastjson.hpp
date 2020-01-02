@@ -181,7 +181,7 @@ namespace fastjson
             static const double lookup_double[10];
             static const char lookup_hexchar[16];
             static const std::size_t utf8_lengths[64];
-            static const std::size_t encoding_sizes[5];
+            static const std::ptrdiff_t encoding_sizes[5];
         };
 
         template<class Ch>
@@ -315,9 +315,27 @@ namespace fastjson
                 else if (*second < *first) return 1;
                 ++first, ++second;
             }
-            if (*first && second == secondend) return 1;
-            else if (*first == Ch('\0') && second != secondend) return -1;
-            return 0;
+            if (!*first && second == secondend) return 0;
+            return !!*first ? 1 : -1;
+        }
+
+        //! Compares two strings. Assumes that both strings are counted--the end character
+        //! points to the character immediately following the string.
+        //! \return 0 if strings match fully and are the same length
+        //! \return -1 if first would be sorted lexicographically before second
+        //! \return 1 if first would be sorted lexicographically after second
+        template<class Ch>
+        int compare(const Ch* first, const Ch* firstend, const Ch* second, const Ch* secondend) NOEXCEPT
+        {
+            assert(first && firstend && second && secondend);
+            while (first != firstend && second != secondend)
+            {
+                if (*first < *second) return -1;
+                else if (*second < *first) return 1;
+                ++first; ++second;
+            }
+            if (first == firstend && second == secondend) return 0;
+            return first != firstend ? 1 : -1;
         }
         
         //! \brief Translates a \c Ch of a hex character to its numeric value.
@@ -1197,17 +1215,17 @@ namespace fastjson
         //! \brief For a json object, accesses a member by name.
         //! The name is case-sensitive. Has time order O(n).
         //! If the value does not exist, a json_value of type value_null is returned.
-        const json_value<Ch>& operator [] (const Ch* name) const NOEXCEPT
+        const json_value<Ch>& at(const Ch* name, const Ch* nameend = NULL) const NOEXCEPT
         {
             assert(this->type_ == value_object);
-            const json_value<Ch>* p = child_;
-            while (p)
+            for (const json_value<Ch>* p = child_; p; p = p->next_)
             {
-                if (internal::compare(name, p->name_, p->nameend_) == 0)
+                if (nameend
+                        ? internal::compare(name, nameend, p->name_, p->nameend_) == 0
+                        : internal::compare(name, p->name_, p->nameend_) == 0)
                 {
                     return *p;
                 }
-                p = p->next_;
             }
             return *json_value<Ch>::null();
         }
@@ -1217,7 +1235,7 @@ namespace fastjson
         //! \param index The index to access. Negative numbers start at the last position (-1 is the last). Zero starts at the first position.
         //! \return the json_value at the specified index.
         //! \return For an invalid index, a json_value of type value_null is returned.
-        const json_value<Ch>& operator [] (int index) const NOEXCEPT
+        const json_value<Ch>& at(int index) const NOEXCEPT
         {
             const json_value<Ch>* p;
             if (index < 0)
@@ -1229,7 +1247,25 @@ namespace fastjson
             {
                 while (index-- > 0 && p) p = p->next_;
             }
-            return p ? *p : json_value<Ch>::null();
+            return p ? *p : *json_value<Ch>::null();
+        }
+
+        //! \brief For a json object, accesses a member by name.
+        //! The name is case-sensitive. Has time order O(n).
+        //! If the value does not exist, a json_value of type value_null is returned.
+        const json_value<Ch>& operator [] (const Ch* name) const NOEXCEPT
+        {
+            return at(name);
+        }
+
+        //! \brief For a json array (or object), accesses a member by index.
+        //! Has time order O(n).
+        //! \param index The index to access. Negative numbers start at the last position (-1 is the last). Zero starts at the first position.
+        //! \return the json_value at the specified index.
+        //! \return For an invalid index, a json_value of type value_null is returned.
+        const json_value<Ch>& operator [] (int index) const NOEXCEPT
+        {
+            return at(index);
         }
 
         //! \brief Adds the given value to the end of the array.
@@ -1314,6 +1350,63 @@ namespace fastjson
                 return p;
             }
             return 0;
+        }
+
+        //! \brief Replaces an existing array entry with the given entry.
+        //! Has time order O(n).
+        //! \param index The index to set. If the index doesn't exist, false is returned.
+        //! \param val The value to set.
+        bool array_set(int index, json_value<Ch>* val)
+        {
+            if (!this->is_array()) return false;
+
+            json_value<Ch>* p;
+            if (index >= 0)
+            {
+                p = child_;
+                while (index > 0 && p)
+                {
+                    --index;
+                    p = p->next_;
+                }
+            }
+            else
+            {
+                // Negative index
+                p = lastchild_;
+                while (++index < 0 && p)
+                {
+                    p = p->prev_;
+                }
+            }
+            if (index == 0)
+            {
+                if (!p)
+                {
+                    // Append to end
+                    if (lastchild_)
+                    {
+                        lastchild_->next_ = val;
+                        val->prev_ = lastchild_;
+                        val->next_ = NULL;
+                        lastchild_ = val;
+                    }
+                    else
+                    {
+                        child_ = lastchild_ = val;
+                        val->prev_ = val->next_ = NULL;
+                    }                        
+                }
+                else
+                {
+                    // Replace existing
+                    if (p->prev_) { p->prev_->next_ = val; val->prev_ = p->prev_; } else { child_ = val; val->prev_ = NULL; }
+                    if (p->next_) { p->next_->prev_ = val; val->next_ = p->next_; } else { lastchild_ = val; val->next_ = NULL; }
+                    p->prev_ = p->next_ = NULL;
+                }                    
+                return true;
+            }
+            return false;
         }
 
         //! \brief Sets a value by name on a json object.
@@ -1459,7 +1552,7 @@ namespace fastjson
             num_encoding//!< Count of encoding values
         };
 
-        //! \brief Parses a json document.
+        //! \brief Parses a json document. The root object is reset before parsing.
         //! \tparam Flags The flags to use when parsing.
         //! \param data The json data to process. The parse() function will automatically determine encoding (utf-8, utf-16 big-endian/little-endian, utf-32 big-endian/little-endian).
         //! \param num_bytes The size of \c data in bytes. The default (-1) indicates that the data is NUL-terminated. Required if \c enc is \c unknown.
@@ -1486,12 +1579,15 @@ namespace fastjson
             const byte* end = ((byte*)data) + num_bytes;
             if (end < data)
             {
+                // Data must be NUL-terminated, so use PTRDIFF_MAX distance (or the end of memory) as the end value
                 assert(sizeof(byte*) == sizeof(std::size_t));
-                std::size_t end_num = std::size_t(-1);
-                const std::size_t size = internal::lookup_tables<0>::encoding_sizes[enc];
-                end_num &= ~(size-1); // Round to encoding size
-                end_num += (std::size_t(data) & (size-1)); // Account for mis-alignment
-                end = (byte*)end_num;
+                std::ptrdiff_t encSize = internal::lookup_tables<0>::encoding_sizes[enc];
+                end = ((byte*)data) + (PTRDIFF_MAX & -encSize);
+                if (end < data)
+                {
+                    end = (byte*)(std::size_t(-1) & -encSize);
+                    end += (std::size_t(data) & (encSize - 1));
+                }
             }
 
             switch (enc)
@@ -2423,7 +2519,7 @@ namespace fastjson
         };
 
         template<int Dummy>
-        const std::size_t lookup_tables<Dummy>::encoding_sizes[5] =
+        const std::ptrdiff_t lookup_tables<Dummy>::encoding_sizes[5] =
         {
             1, 2, 2, 4, 4
         };
