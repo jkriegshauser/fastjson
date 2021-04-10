@@ -1,4 +1,4 @@
-#include "gtest/gtest.h"
+#include "doctest.h"
 #include "../fastjson.hpp"
 
 #pragma warning (disable : 4127) // Conditional expression is constant
@@ -49,56 +49,56 @@ template<class ChIn, class ChOut, bool Swap> void do_test()
 	}
 	catch (parse_error e)
 	{
-		ASSERT_FALSE(0) << "Unexpected parse error: " << e.what() << " at offset " << (std::size_t)(e.where<ChIn>() - copy);
+		REQUIRE_MESSAGE(0, "Unexpected parse error: ", e.what(), " at offset ", (std::size_t)(e.where<ChIn>() - copy));
 	}
 }
 
-TEST(convert, utf8_to_8)
+TEST_CASE("convert utf8_to_8")
 {
 	do_test<char, char, false>();
 }
 
-TEST(convert, utf8_to_16)
+TEST_CASE("convert utf8_to_16")
 {
 	do_test<char, wchar_t, false>();
 }
 
-TEST(convert, utf8_to_32)
+TEST_CASE("convert utf8_to_32")
 {
 	do_test<char, unsigned, false>();
 }
 
-TEST(convert, utf16_to_8)
+TEST_CASE("convert utf16_to_8")
 {
 	do_test<wchar_t, char, false>();
 	do_test<wchar_t, char, true>();
 }
 
-TEST(convert, utf16_to_16)
+TEST_CASE("convert utf16_to_16")
 {
 	do_test<wchar_t, wchar_t, false>();
 	do_test<wchar_t, wchar_t, true>();
 }
 
-TEST(convert, utf16_to_32)
+TEST_CASE("convert utf16_to_32")
 {
 	do_test<wchar_t, unsigned, false>();
 	do_test<wchar_t, unsigned, true>();
 }
 
-TEST(convert, utf32_to_8)
+TEST_CASE("convert utf32_to_8")
 {
 	do_test<unsigned, char, false>();
 	do_test<unsigned, char, true>();
 }
 
-TEST(convert, utf32_to_16)
+TEST_CASE("convert utf32_to_16")
 {
 	do_test<unsigned, wchar_t, false>();
 	do_test<unsigned, wchar_t, true>();
 }
 
-TEST(convert, utf32_to_32)
+TEST_CASE("convert utf32_to_32")
 {
 	do_test<unsigned, unsigned, false>();
 	do_test<unsigned, unsigned, true>();

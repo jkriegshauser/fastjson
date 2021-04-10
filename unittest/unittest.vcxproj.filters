@@ -8,5 +8,9 @@
     <ClCompile Include="internal_tests.cpp" />
     <ClCompile Include="parse_tests.cpp" />
     <ClCompile Include="convert_tests.cpp" />
+    <ClCompile Include="interface_tests.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="doctest.h" />
   </ItemGroup>
 </Project>

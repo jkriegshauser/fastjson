@@ -1,4 +1,4 @@
-#include "gtest/gtest.h"
+#include "doctest.h"
 
 #include "fastjson.hpp"
 
@@ -34,13 +34,13 @@ template<class Ch, int Flags, bool destructive> void test()
 	{
 		for (int i = 0; i < sizeof(text); ++i)
 		{
-			EXPECT_EQ(Ch(text[i]), buffer[i]) << "Flags(" << Flags << ") Buffer destroyed at index " << i << "\"" << text + i << "\"";
+			CHECK_MESSAGE(Ch(text[i]) == buffer[i], "Flags(", Flags, ") Buffer destroyed at index ", i, "\"", text + i, "\"");
 			if (Ch(text[i]) != buffer[i]) break;
 		}			
 	}
 }
 
-TEST(parse_tests, non_destructive_char)
+TEST_CASE("parse_tests non_destructive_char")
 {
 	test<char, parse_non_destructive, false>();
 	test<char, parse_non_destructive_nul, false>();

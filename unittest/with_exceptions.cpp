@@ -1,4 +1,4 @@
-#include "gtest/gtest.h"
+#include "doctest.h"
 
 #if !defined(FASTJSON_NO_EXCEPTIONS)
 #include "fastjson.hpp"
@@ -25,18 +25,18 @@ public:
         try
         {
             doc.template parse<Flags>(buffer, (outp - buffer)*sizeof(Ch));
-            EXPECT_TRUE(expectSuccess) << "Parse succeeded unexpectedly for text: " << data;
+            CHECK_MESSAGE(expectSuccess, "Parse succeeded unexpectedly for text: ", data);
         }
         catch (fastjson::parse_error e)
         {
-            EXPECT_FALSE(expectSuccess) << "Parse failed unexpectedly for text: " << data;
-            EXPECT_EQ(offset, e.where<Ch>() - buffer) << "For error (" << errorString << ") and text: " << data;
-            EXPECT_STREQ(errorString, e.what());
+            CHECK_FALSE_MESSAGE(expectSuccess, "Parse failed unexpectedly for text: ", data);
+            CHECK_MESSAGE(offset == e.where<Ch>() - buffer, "For error (", errorString, ") and text: ", data);
+            CHECK_EQ(errorString, e.what());
         }
     }
 };
 
-TEST(fastjson_with_except, parser)
+TEST_CASE("fastjson_with_except parser")
 {
     test_parse_failure_except<> tester;
     // Arrays
