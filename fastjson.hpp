@@ -1473,10 +1473,12 @@ namespace fastjson
         void remove_all() NOEXCEPT
         {
             json_value<Ch>* p = child_;
-            while (p)
+            while (child_)
             {
-                p->owner_ = 0;
-                p->prev_ = p->next_ = 0;
+                json_value<Ch>* next = p->next_;
+                child_->owner_ = 0;
+                child_->prev_ = child_->next_ = 0;
+                child_ = next;
             }
             numchildren_ = 0;
             child_ = lastchild_ = 0;
